@@ -4,7 +4,12 @@ exception UndefinedSemantics
 
 type id = string 
 type exprtype = Int | BV | String | Bool 
-type const = CInt of int | CBV of Int64.t | CString of string | CBool of bool 
+type const = CInt of int 
+	| CBV of Int64.t 
+	| CString of string 
+	| CBool of my_bool 
+and my_bool = Concrete of bool | Abstract (* can be either of true or false *) 
+	
 type expr =  
 	| Param of int * exprtype (* position and type *)
 	| Var of string * exprtype (* name and type : only for SMT *) 
@@ -34,7 +39,7 @@ let get_trivial_value ty =
 	| Int -> CInt 0  
 	| BV -> CBV (Int64.zero) 
 	| String -> CString "" 
-	| Bool -> CBool true 
+	| Bool -> CBool (Concrete true) 
 
 let is_function_expr expr = 
 	match expr with 
@@ -66,6 +71,11 @@ let rec join strlist =
 	| hd :: [] -> hd 
 	| hd :: tl -> hd ^ ", " ^ (join tl)  
 		
+let string_of_my_bool mybool = 
+	match mybool with 
+	| Concrete b -> string_of_bool b 
+	| Abstract -> "*" 
+
 let rec string_of_const const = 
 	match const with 
 	| CInt n -> string_of_int n
@@ -73,7 +83,7 @@ let rec string_of_const const =
 		(* Int64.to_string n *)
 		Printf.sprintf "#x%016Lx" n
 	| CString s -> "\"" ^ s ^ "\"" 
-	| CBool b -> string_of_bool b 
+	| CBool b -> string_of_my_bool b 
 
 let string_of_signature signature =
 	string_of_list string_of_const signature
@@ -124,9 +134,14 @@ let get_int expr =
 	| (CInt i) -> i 
 	| _ -> assert false 
 
-let get_bool expr = 
+let is_abstract_bool expr = 
 	match expr with 
-	| (CBool b) -> b 
+	| CBool Abstract -> true 
+	| _ -> false 
+	
+let get_concrete_bool expr = 
+	match expr with 
+	| CBool (Concrete b) -> b 
 	| _ -> assert false 
 
 let sexpstr_of_fun name expr =
@@ -151,44 +166,44 @@ let fun_apply_signature op values =
 	if (String.compare op "=") = 0 then
 		let sig1 = (List.nth values 0) in
 		let sig2 = (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool ((Pervasives.compare const1 const2) = 0)) sig1 sig2
+		List.map2 (fun const1 const2 -> CBool (Concrete ((Pervasives.compare const1 const2) = 0))) sig1 sig2
 	else if (String.compare op "<") = 0 then
 		let sig1 = (List.nth values 0) in
 		let sig2 = (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool ((Pervasives.compare const1 const2) < 0)) sig1 sig2
+		List.map2 (fun const1 const2 -> CBool (Concrete ((Pervasives.compare const1 const2) < 0))) sig1 sig2
 	else if (String.compare op ">") = 0 then
 		let sig1 = (List.nth values 0) in
 		let sig2 = (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool ((Pervasives.compare const1 const2) > 0)) sig1 sig2
+		List.map2 (fun const1 const2 -> CBool (Concrete ((Pervasives.compare const1 const2) > 0))) sig1 sig2
 	else if (String.compare op "<=") = 0 then
 		let sig1 = (List.nth values 0) in
 		let sig2 = (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool ((Pervasives.compare const1 const2) <= 0)) sig1 sig2
+		List.map2 (fun const1 const2 -> CBool (Concrete ((Pervasives.compare const1 const2) <= 0))) sig1 sig2
 	else if (String.compare op ">=") = 0 then
 		let sig1 = (List.nth values 0) in
 		let sig2 = (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool ((Pervasives.compare const1 const2) >= 0)) sig1 sig2
+		List.map2 (fun const1 const2 -> CBool (Concrete ((Pervasives.compare const1 const2) >= 0))) sig1 sig2
 	else if (String.compare op "ite") = 0 then
-		let bools = List.map get_bool (List.nth values 0) in
+		let bools = List.map get_concrete_bool (List.nth values 0) in
 		let sig1 = (List.nth values 1) in
 		let sig2 = (List.nth values 2) in
 		map3 (fun bool const1 const2 -> if bool then const1 else const2) bools sig1 sig2
 	(** Bool theory **)
 	else if (String.compare op "and") = 0 then
-		let bools1 = List.map get_bool (List.nth values 0) in 
-		let bools2 = List.map get_bool (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool (const1 && const2)) bools1 bools2
+		let bools1 = List.map get_concrete_bool (List.nth values 0) in 
+		let bools2 = List.map get_concrete_bool (List.nth values 1) in
+		List.map2 (fun const1 const2 -> CBool (Concrete (const1 && const2))) bools1 bools2
 	else if (String.compare op "or") = 0 then
-		let bools1 = List.map get_bool (List.nth values 0) in 
-		let bools2 = List.map get_bool (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool (const1 || const2)) bools1 bools2
+		let bools1 = List.map get_concrete_bool (List.nth values 0) in 
+		let bools2 = List.map get_concrete_bool (List.nth values 1) in
+		List.map2 (fun const1 const2 -> CBool (Concrete (const1 || const2))) bools1 bools2
 	else if (String.compare op "xor") = 0 then
-		let bools1 = List.map get_bool (List.nth values 0) in 
-		let bools2 = List.map get_bool (List.nth values 1) in
-		List.map2 (fun const1 const2 -> CBool (const1 <> const2)) bools1 bools2
+		let bools1 = List.map get_concrete_bool (List.nth values 0) in 
+		let bools2 = List.map get_concrete_bool (List.nth values 1) in
+		List.map2 (fun const1 const2 -> CBool (Concrete (const1 <> const2))) bools1 bools2
 	else if (String.compare op "not") = 0 then
-		let bools1 = List.map get_bool (List.nth values 0) in
-		List.map (fun const1 -> CBool (not const1)) bools1
+		let bools1 = List.map get_concrete_bool (List.nth values 0) in
+		List.map (fun const1 -> CBool (Concrete (not const1))) bools1
 	(** STRING theory **)
 	else if (String.compare op "str.len") = 0 then 
 		let strs = List.map get_string (List.nth values 0) in 
@@ -210,15 +225,15 @@ let fun_apply_signature op values =
 	else if (String.compare op "str.contains") = 0 then
 		let str1s = List.map get_string (List.nth values 0) in  
 		let str2s = List.map get_string (List.nth values 1) in
-		(List.map2 (fun str1 str2 -> CBool (BatString.exists str1 str2)) str1s str2s)
+		(List.map2 (fun str1 str2 -> CBool (Concrete (BatString.exists str1 str2))) str1s str2s)
 	else if (String.compare op "str.prefixof") = 0 then
 		let str1s = List.map get_string (List.nth values 0) in  
 		let str2s = List.map get_string (List.nth values 1) in
-		(List.map2 (fun str1 str2 -> CBool (BatString.starts_with str2 str1)) str1s str2s)
+		(List.map2 (fun str1 str2 -> CBool (Concrete (BatString.starts_with str2 str1))) str1s str2s)
 	else if (String.compare op "str.suffixof") = 0 then
 		let str1s = List.map get_string (List.nth values 0) in  
 		let str2s = List.map get_string (List.nth values 1) in
-		(List.map2 (fun str1 str2 -> CBool (BatString.ends_with str2 str1)) str1s str2s)
+		(List.map2 (fun str1 str2 -> CBool (Concrete (BatString.ends_with str2 str1))) str1s str2s)
 	else if (String.compare op "str.indexof") = 0 then
 		let str1s = List.map get_string (List.nth values 0) in  
 		let str2s = List.map get_string (List.nth values 1) in

@@ -1,6 +1,6 @@
 open Vocab
 open Exprs
-open AftaUtils
+open BidirectionalUtils
 
 exception WitnessFailure
 
@@ -170,13 +170,13 @@ let get_replacement_pairs src_str dst_str =
     		let _ = assert ((List.length aligned_src) = (List.length aligned_dst)) in
     		(* if src_str = "aaa", dst_str = "bbb", diff_ranges = [] *)
     		(* i.e., if the entire string should be replaced, no pairs are returned. *)
-    		let _, diff_range, diff_ranges = 
+    		let _, _(*diff_range*), diff_ranges = 
       		List.fold_left (fun (i, range, ranges) (src_char_opt, dst_char_opt) ->
       			if src_char_opt = dst_char_opt then (i + 1, [], ranges @ [range]) 
     				else (i + 1, range @ [i], ranges) 
       		) (0, [], []) (List.combine aligned_src aligned_dst)     	
     		in
-    		let diff_ranges = List.filter (fun x -> (List.length x) > 0) (diff_ranges @ [diff_range]) in
+    		let diff_ranges = List.filter (fun x -> (List.length x) > 0) (diff_ranges (*@ [diff_range]*)) in
     		let subst_pairs =  
       		List.map (fun range ->
       			let string_of_charoptlst x = 
@@ -331,93 +331,55 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 	let op = Grammar.op_of_rule rule in  
 	(** Theory agnostic *)
 	if (String.compare op "=") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then nt_sigs
 		else 
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try 
-						(type_of_const arg0_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-						(type_of_const arg1_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-  					(let output_v = get_bool output_const in
-  					((Pervasives.compare arg0_const arg1_const) = 0) = output_v)
-					with _ -> true (* for learn_ite *)   
+					(is_abstract_bool output_const) || (* for learn_ite *)
+					(let output_v = get_concrete_bool output_const in
+					 ((Pervasives.compare arg0_const arg1_const) = 0) = output_v)
 				) (BatList.combine arg0_sig arg1_sig) output_sig 
 			) nt_sigs
 	else if (String.compare op "<") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then nt_sigs
 		else 
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try 
-						(type_of_const arg0_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-						(type_of_const arg1_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-  					(let output_v = get_bool output_const in
-  					((Pervasives.compare arg0_const arg1_const) < 0) = output_v)
-					with _ -> true (* for learn_ite *)   
+					(is_abstract_bool output_const) || (* for learn_ite *)
+					(let output_v = get_concrete_bool output_const in
+					 ((Pervasives.compare arg0_const arg1_const) < 0) = output_v)   
 				) (BatList.combine arg0_sig arg1_sig) output_sig 
 			) nt_sigs		
 	else if (String.compare op ">") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then nt_sigs
 		else 
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try 
-						(type_of_const arg0_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-						(type_of_const arg1_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-  					(let output_v = get_bool output_const in
-  					((Pervasives.compare arg0_const arg1_const) > 0) = output_v)
-					with _ -> true (* for learn_ite *)   
+					(is_abstract_bool output_const) || (* for learn_ite *)
+					(let output_v = get_concrete_bool output_const in
+					 ((Pervasives.compare arg0_const arg1_const) > 0) = output_v)   
 				) (BatList.combine arg0_sig arg1_sig) output_sig 
 			) nt_sigs
 	else if (String.compare op "<=") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then nt_sigs
 		else 
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try 
-						(type_of_const arg0_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-						(type_of_const arg1_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-  					(let output_v = get_bool output_const in
-  					((Pervasives.compare arg0_const arg1_const) <= 0) = output_v)
-					with _ -> true (* for learn_ite *)   
-				) (BatList.combine arg0_sig arg1_sig) output_sig 
-			) nt_sigs
-	else if (String.compare op "=") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
-		if (BatList.length arg_sigs) = 0 then nt_sigs
-		else 
-			let arg0_sig = List.nth arg_sigs 0 in
-			BatSet.filter (fun arg1_sig ->
-				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try 
-						(type_of_const arg0_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-						(type_of_const arg1_const) <> (type_of_const output_const) (* for learn_ite *)
-						||
-  					(let output_v = get_bool output_const in
-  					((Pervasives.compare arg0_const arg1_const) >= 0) = output_v)
-					with _ -> true (* for learn_ite *)   
+					(is_abstract_bool output_const) || (* for learn_ite *)
+					(let output_v = get_concrete_bool output_const in
+					 ((Pervasives.compare arg0_const arg1_const) <= 0) = output_v)   
 				) (BatList.combine arg0_sig arg1_sig) output_sig 
 			) nt_sigs
 	else if (String.compare op "ite") = 0 then
@@ -425,56 +387,54 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 		assert false 
 	(** Propositional theory *)
 	else if (String.compare op "and") = 0 then
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then
 			BatSet.filter (fun arg0_sig ->
 				BatList.for_all (fun (arg0_const, output_const) ->
-					try 
-					let arg0_v = get_bool arg0_const in
-					let output_v = get_bool output_const in
-					((not (output_v = true)) || (arg0_v = true))
-					with _ -> true 
+					(is_abstract_bool output_const) || 
+					(let arg0_v = get_concrete_bool arg0_const in
+					 let output_v = get_concrete_bool output_const in
+					 ((not (output_v = true)) || (arg0_v = true)))
 				) (BatList.combine arg0_sig output_sig)
 			) nt_sigs
 		else
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try
-					let arg0_v = get_bool arg0_const in
-					let arg1_v = get_bool arg1_const in
-					let output_v = get_bool output_const in
-					(arg0_v && arg1_v) = output_v		
-					with _ -> true
+					(is_abstract_bool output_const) ||
+					(let arg0_v = get_concrete_bool arg0_const in
+					 let arg1_v = get_concrete_bool arg1_const in
+					 let output_v = get_concrete_bool output_const in
+					 (arg0_v && arg1_v) = output_v)
 				) (BatList.combine arg0_sig arg1_sig) output_sig
 			) nt_sigs
 	else if (String.compare op "or") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then
 			BatSet.filter (fun arg0_sig ->
 				BatList.for_all (fun (arg0_const, output_const) ->
-					try
-					let arg0_v = get_bool arg0_const in
-					let output_v = get_bool output_const in
-					((not (output_v = false)) || (arg0_v = false))
-					with _ -> true
+					(is_abstract_bool output_const) ||
+					(let arg0_v = get_concrete_bool arg0_const in
+					 let output_v = get_concrete_bool output_const in
+					 ((not (output_v = false)) || (arg0_v = false)))
 				) (BatList.combine arg0_sig output_sig)
 			) nt_sigs
 		else
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try
-					let arg0_v = get_bool arg0_const in
-					let arg1_v = get_bool arg1_const in
-					let output_v = get_bool output_const in
-					(arg0_v || arg1_v) = output_v
-					with _ -> true		
+					(is_abstract_bool output_const) ||
+					(let arg0_v = get_concrete_bool arg0_const in
+					 let arg1_v = get_concrete_bool arg1_const in
+					 let output_v = get_concrete_bool output_const in
+					 (arg0_v || arg1_v) = output_v)
 				) (BatList.combine arg0_sig arg1_sig) output_sig
 			) nt_sigs
 	else if (String.compare op "xor") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 		if (BatList.length arg_sigs) = 0 then 
 			BatSet.filter (fun arg0_sig ->
 				let arg1_sig = fun_apply_signature "xor" [arg0_sig; output_sig] in 
@@ -484,12 +444,11 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 			let arg0_sig = List.nth arg_sigs 0 in
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					try 
-					let arg0_v = get_bool arg0_const in
-					let arg1_v = get_bool arg1_const in
-					let output_v = get_bool output_const in
-					(arg0_v <> arg1_v) = output_v
-					with _ -> true 
+					(is_abstract_bool output_const) || 
+					(let arg0_v = get_concrete_bool arg0_const in
+					 let arg1_v = get_concrete_bool arg1_const in
+					 let output_v = get_concrete_bool output_const in
+					 (arg0_v <> arg1_v) = output_v)
 				) (BatList.combine arg0_sig arg1_sig) output_sig
 			) nt_sigs
 			(* let arg0_sig = List.nth arg_sigs 0 in *)
@@ -499,15 +458,14 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 			(* 	acc @ [CBool (arg0_v <> output_v)]                           *)
 			(* ) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton *)
 	else if (String.compare op "not") = 0 then
-		(* if (type_of_signature output_sig) <> Bool then assert false *)
-		(* else                                                        *)
+		if (type_of_signature output_sig) <> Bool then assert false
+		else
 			BatSet.filter (fun arg0_sig ->
 				BatList.for_all (fun (arg0_const, output_const) ->
-					try 
-					let arg0_v = get_bool arg0_const in
-					let output_v = get_bool output_const in
-					(not arg0_v) = output_v
-					with _ -> true 
+					(is_abstract_bool output_const) ||  
+					(let arg0_v = get_concrete_bool arg0_const in
+					 let output_v = get_concrete_bool output_const in
+					 (not arg0_v) = output_v)
 				) (BatList.combine arg0_sig output_sig)
 			) nt_sigs
 			(* BatList.fold_left (fun acc output_const -> *)
@@ -515,9 +473,6 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 			(* 	acc @ [(CBool (not output_v))]           *)
 			(* ) [] output_sig |> BatSet.singleton        *)
 	(** STRING theory **)
-	(* else if (type_of_signature output_sig) = String &&                                                   *)
-	(* 	(BatList.exists (fun output_const -> String.length (get_string output_const) = 0) output_sig) then *)
-	(* 	BatSet.empty                                                                                       *)
 	else if (String.compare op "str.len") = 0 then
 		if (type_of_signature output_sig) <> Int then assert false
 		else
@@ -648,8 +603,7 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 				BatSet.filter (fun arg1_sig ->
 					let sg = (fun_apply_signature op [arg0_sig; arg1_sig]) in
 					List.for_all2 (fun const output_const ->
-						(type_of_const const) <> (type_of_const output_const) (* for learn_ite *)
-						|| 
+						(is_abstract_bool output_const) || (* for learn_ite *)
 						(Pervasives.compare const output_const) = 0
 					) sg output_sig
 				) string_sigs 
@@ -1570,8 +1524,9 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 				BatList.for_all (fun (arg0_const, output_const) -> 
 					let arg0_v = get_int arg0_const in
 					let output_v = get_int output_const in
+					(abs (output_v - arg0_v)) < (abs output_v)
 					(* to prevent from generating the same sub problem *)
-					((abs arg0_v) < (abs output_v)) && (arg0_v <> 0)
+					(* ((abs arg0_v) < (abs output_v)) && (arg0_v <> 0) *)
 				) (BatList.combine arg0_sig output_sig) 
 			) int_sigs
 		else 
@@ -1589,7 +1544,8 @@ let witness nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig 
 					let arg0_v = get_int arg0_const in
 					let output_v = get_int output_const in
 					(* to prevent from generating the same sub problem *)
-					(arg0_v > output_v) 
+					(abs (arg0_v - output_v)) < (abs output_v)
+					(* (arg0_v > output_v)  *)
 				) (BatList.combine arg0_sig output_sig) 
 			) int_sigs
 		else 

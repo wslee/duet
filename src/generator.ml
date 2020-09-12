@@ -79,9 +79,9 @@ let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec targ
 	if (List.length holes) = 0 then (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)
 	else
 	let rule_size = size_of_rewrite rule in  
-	let _ = my_prerr_endline (Printf.sprintf "Applying rule: %s -> %s" (string_of_rewrite nt) (string_of_rewrite rule)) in
+	(* let _ = my_prerr_endline (Printf.sprintf "Applying rule: %s -> %s" (string_of_rewrite nt) (string_of_rewrite rule)) in *)
 	let size_partitions = get_size_partitions holes (target_size - rule_size) nt_to_exprs in
-	let _ = my_prerr_endline (string_of_list (fun part -> string_of_list string_of_int part) size_partitions) in
+	(* let _ = my_prerr_endline (string_of_list (fun part -> string_of_list string_of_int part) size_partitions) in *)
 	let upper_bounds_list = 
 		List.map (fun size_partition ->
 			let _ = assert ((List.length size_partition) = (List.length holes)) in
@@ -140,7 +140,7 @@ let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec targ
 				if (compare desired_sig signature) = 0 then
 					raise (SolutionFound expr) 
 				else if not (BatSet.mem signature expr_sigs) then
-					let _ = my_prerr_endline (Printf.sprintf "Generated: %s %s" (Exprs.string_of_expr expr) (string_of_signature signature)) in
+					(* let _ = my_prerr_endline (Printf.sprintf "Generated: %s %s" (Exprs.string_of_expr expr) (string_of_signature signature)) in *)
 					(* New candidiate found. Update *)
 					let _ = nt_to_sigs_ref := add_signature nt signature !nt_to_sigs_ref in 
 					let _ = nt_to_exprs_ref := add_expr nt (expr, size_of_expr expr) !nt_to_exprs_ref in
@@ -186,21 +186,21 @@ let enum_bu_search grammar spec =
   	in 
   	let rec iter size (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =
 			(if (size > !Options.max_size) then failwith (Printf.sprintf "No solution of size < %d !" !Options.max_size));
-  		my_prerr_endline (Printf.sprintf "-- Size : %d --" size);
-			my_prerr_endline ("-- # Components: --");
-			BatSet.iter (fun nt ->
-				my_prerr_endline (Printf.sprintf "%s : %d" (string_of_rewrite nt) (BatSet.cardinal (BatMap.find nt nt_to_exprs)));
-				List.iter (fun sz -> 
-					let components = (get_components nt nt_to_exprs sz) in 
-					if (List.length components) > 0 then 
-						my_prerr_endline (string_of_list string_of_expr components)
-				) (BatList.range 1 `To size); 
-				my_prerr_endline (string_of_map string_of_rewrite (fun sigs -> string_of_set string_of_signature sigs) nt_to_sigs);
-			) nts; 
-			prerr_endline (Printf.sprintf "************ nt -> exprs ************");
-  		BatMap.iter (fun nt exprs ->
-  			prerr_endline (Printf.sprintf "%s -> %s" (Grammar.string_of_rewrite nt) (string_of_set (fun (e,i) -> Printf.sprintf "%s (%d)" (Exprs.string_of_expr e) i) exprs))
-  		) nt_to_exprs;
+  		(* my_prerr_endline (Printf.sprintf "-- Size : %d --" size);                                                                                                           *)
+			(* my_prerr_endline ("-- # Components: --");                                                                                                                           *)
+			(* BatSet.iter (fun nt ->                                                                                                                                              *)
+			(* 	my_prerr_endline (Printf.sprintf "%s : %d" (string_of_rewrite nt) (BatSet.cardinal (BatMap.find nt nt_to_exprs)));                                                *)
+			(* 	List.iter (fun sz ->                                                                                                                                              *)
+			(* 		let components = (get_components nt nt_to_exprs sz) in                                                                                                          *)
+			(* 		if (List.length components) > 0 then                                                                                                                            *)
+			(* 			my_prerr_endline (string_of_list string_of_expr components)                                                                                                   *)
+			(* 	) (BatList.range 1 `To size);                                                                                                                                     *)
+			(* 	my_prerr_endline (string_of_map string_of_rewrite (fun sigs -> string_of_set string_of_signature sigs) nt_to_sigs);                                               *)
+			(* ) nts;                                                                                                                                                              *)
+			(* my_prerr_endline (Printf.sprintf "************ nt -> exprs ************");                                                                                          *)
+  		(* BatMap.iter (fun nt exprs ->                                                                                                                                        *)
+  		(* 	prerr_endline (Printf.sprintf "%s -> %s" (Grammar.string_of_rewrite nt) (string_of_set (fun (e,i) -> Printf.sprintf "%s (%d)" (Exprs.string_of_expr e) i) exprs)) *)
+  		(* ) nt_to_exprs;                                                                                                                                                      *)
   		let nt_sig_to_expr' = nt_sig_to_expr in 
 			let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) = 
 				List.fold_left (fun (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) (nt, rule) ->

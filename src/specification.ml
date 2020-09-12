@@ -2,12 +2,12 @@ open Sexplib
 open Vocab
 open Exprs
 open Z3
-
+open BidirectionalUtils
 
 let sexp_to_const sexp = 
 	let str = Sexp.to_string sexp in 
-	if (String.compare str "true") = 0 then (CBool true)
-	else if (String.compare str "false") = 0 then (CBool false)
+	if (String.compare str "true") = 0 then (CBool (Concrete true))
+	else if (String.compare str "false") = 0 then (CBool (Concrete false))
 	else if (BatString.starts_with str "#x") then 
 		(CBV (Int64.of_string ("0" ^ (BatString.lchop ~n:1 str))))
 	else if (BatString.starts_with str "#u") then 
@@ -20,7 +20,6 @@ let sexp_to_const sexp =
 		
 		
 exception UnknownModel
-(* spec for programming-by-example *)
 
 (* oracle expr with a given function name and quantified variables  *)
 let oracle_expr = ref (Const (CInt 0))
@@ -30,10 +29,8 @@ let forall_var_map : (string, Exprs.expr) BatMap.t ref =
 	(* name -> Param int *) 
 	ref BatMap.empty
 
+(* spec for programming-by-example *)
 type t = ((const list) * const) list  
-
-(* function to estimate distances (for a* heuristic) *)
-let dist c1 c2 = 0
 
 let empty_spec = []
 
@@ -52,7 +49,7 @@ let abstract_bv_spec spec =
 		let bv = get_bv const in
 		CBV (Int64.rem bv 1024L)    
 	in  
-	if (AftaUtils.type_of_signature (fst (List.hd spec))) <> BV then spec 
+	if (type_of_signature (fst (List.hd spec))) <> BV then spec 
 	else 
 		List.map (fun (inputs, output) ->
 			(List.map abstract_bv inputs, abstract_bv output)  
@@ -128,8 +125,8 @@ let verify sol spec =
 					Exprs.compute_signature [(cex_input, CInt 0)] !oracle_expr_resolved
 					|> List.hd
 				in
-				prerr_endline (Printf.sprintf "sol:%s   oracle:%s" (string_of_const sol_output) (string_of_const cex_output));
-				prerr_endline (Printf.sprintf "cex : %s" (string_of_io_spec [(cex_input, cex_output)]));
+				my_prerr_endline (Printf.sprintf "sol:%s   oracle:%s" (string_of_const sol_output) (string_of_const cex_output));
+				my_prerr_endline (Printf.sprintf "cex : %s" (string_of_io_spec [(cex_input, cex_output)]));
 				let _ = assert ((Pervasives.compare sol_output cex_output) <> 0) in
 				Some (cex_input, cex_output)
 			)

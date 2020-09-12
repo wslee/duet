@@ -1,7 +1,6 @@
 open Grammar
 open Exprs
 open Vocab
-open AftaUtils
 open Witness
 open BidirectionalUtils
 
@@ -9,31 +8,23 @@ let cache : (int BatSet.t, float) BatMap.t ref = ref BatMap.empty
  
 (* cover : signature -> int BatSet.t (set of point indices) *)
 let compute_entropy pts cover pt2covers pt2covered_array nt_sigs = 
-	(* if true then 1.0 else *)
 	if (BatMap.mem pts !cache) then BatMap.find pts !cache 
 	else 
 	let total_pts = BatSet.cardinal pts in
 	let pts_bitset = intset2bitset pts in 
 	let get_prob nt_sig =
 		let cover_t : BitSet.t = (BatMap.find nt_sig cover) in
-		(* let covered_pts = BatSet.intersect cover_t pts in *)
 		let n_covered_pts = 
 			BitSet.cardinal (BitSet.inter cover_t pts_bitset)
-			(* let tmp : BitSet.t = BitSet.copy cover_t in  *)
-			(* BitSet.inter tmp pts_bitset; *)
-			(* BitSet.count tmp             *)
 		in
-		(* 10110 00110 -> 2 *)
-		(* 00101 00110 -> 1 *)
-		(* 11010 00110 -> 1 *)
-		let sum_of_cond_prob = (* |pts| * |nt_sigs| about 1000 * 1000 *)
+		let sum_of_cond_prob = 
 			BatSet.fold (fun pt acc ->
 				if (BitSet.get cover_t pt) then
 					let total_covered_pts =
-						(* heuristic! *)
+						(** heuristic for fast learning of DTs *)
 						if (!Options.fast_dt) then 
 							List.length (BatMap.find pt pt2covers)
-						(* original formula *)
+						(** original DT learning *)
 						else 
   						List.fold_left (fun denom covered ->
   							let intersect =
@@ -67,7 +58,7 @@ let get_best_bool_sig pts bool_nt bool_sigs nt_sigs cover pt2covers pt2covered_a
 		List.map (fun bool_sig ->
 			let pts_y = 
   			BatSet.fold (fun pt acc -> 
-  				if (get_bool (List.nth bool_sig pt)) then BatSet.add pt acc
+  				if (get_concrete_bool (List.nth bool_sig pt)) then BatSet.add pt acc
   				else acc 
   			) pts BatSet.empty   
 			in
@@ -78,7 +69,7 @@ let get_best_bool_sig pts bool_nt bool_sigs nt_sigs cover pt2covers pt2covered_a
 				(float_of_int (BatSet.cardinal pts_y)) /. (float_of_int total_pts) *. h_pts_y +. 
 				(float_of_int (BatSet.cardinal pts_n)) /. (float_of_int total_pts) *. h_pts_n 
 			in
-			prerr_endline (Printf.sprintf "score: %.2f" score);
+			my_prerr_endline (Printf.sprintf "score: %.2f" score);
 			(bool_sig, score)			 
 		) (BatSet.elements bool_sigs) 
 	in 
@@ -108,16 +99,16 @@ let rec learndt (pts, bool_sigs, cover, pt2covers, pt2covered_array)
 			) nt_to_sigs 
 	in
 	let nt_sigs = BatMap.find nt nt_to_sigs in
-	prerr_endline (Printf.sprintf "minimal |nt_sigs| = %d" (BatSet.cardinal nt_sigs));
+	my_prerr_endline (Printf.sprintf "minimal |nt_sigs| = %d" (BatSet.cardinal nt_sigs));
 	(* get all "distinguishing" predicates *)
 	let bool_sigs =
 		BatSet.filter (fun bool_sig ->
 			let bool_sig = List.fold_left (fun acc i -> acc @ [List.nth bool_sig i]) [] pts in
-			List.exists (fun x -> (Pervasives.compare x (CBool true)) = 0) bool_sig &&
-			List.exists (fun x -> (Pervasives.compare x (CBool false)) = 0) bool_sig
+			List.exists (fun x -> (Pervasives.compare x (CBool (Concrete true))) = 0) bool_sig &&
+			List.exists (fun x -> (Pervasives.compare x (CBool (Concrete false))) = 0) bool_sig
 		) bool_sigs
 	in
-	prerr_endline (Printf.sprintf "|bool_sigs|: %d" (BatSet.cardinal bool_sigs));
+	my_prerr_endline (Printf.sprintf "|bool_sigs|: %d" (BatSet.cardinal bool_sigs));
 	let nt_sigs = BatMap.find nt nt_to_sigs in
 	let nt_ty = type_of_signature desired_sig in 
 	let bool_nt = List.nth (get_nts rule) 0 in
@@ -150,24 +141,15 @@ let rec learndt (pts, bool_sigs, cover, pt2covers, pt2covered_array)
 		(* left_pts : pts satisfying pred *)
 		let left_pts =  
 			List.fold_left (fun acc (bool_const, i) -> 
-				if (get_bool bool_const) && (List.mem i pts) then acc @ [i] else acc  
+				if (get_concrete_bool bool_const) && (List.mem i pts) then acc @ [i] else acc  
 			) [] (List.combine bool_sig (BatList.range 0 `To ((List.length bool_sig) - 1))) 
 		in
 		(* right_pts : pts unsatisfying pred *) 
 		let right_pts = 
 			List.fold_left (fun acc (bool_const, i) -> 
-				if not (get_bool bool_const) && (List.mem i pts) then acc @ [i] else acc  
+				if not (get_concrete_bool bool_const) && (List.mem i pts) then acc @ [i] else acc  
 			) [] (List.combine bool_sig (BatList.range 0 `To ((List.length bool_sig) - 1))) 
 		in  
-		(* let _ =                                                                             *)
-		(* 	begin                                                                             *)
-		(* 		prerr_endline (Printf.sprintf "pred: %s" (Exprs.string_of_expr pred));          *)
-		(* 		prerr_endline ("bool sig: " ^ (string_of_list Exprs.string_of_const bool_sig)); *)
-		(* 		prerr_endline ("pts      : " ^ (string_of_list string_of_int pts));             *)
-		(* 		prerr_endline ("left pts : " ^ (string_of_list string_of_int left_pts));        *)
-		(* 		prerr_endline ("right pts: " ^ (string_of_list string_of_int right_pts));       *)
-		(* 	end                                                                               *)
-		(* in                                                                                  *)
 		(* learn left & right subtree *)
 		let left = learndt (left_pts, bool_sigs', cover, pt2covers, pt2covered_array) (available_height, available_size) (nt, desired_sig) (spec, nt_rule_list, rule, nt_to_sigs, nt_sig_to_expr) in 
 		let right = learndt (right_pts, bool_sigs', cover, pt2covers, pt2covered_array) (available_height, available_size) (nt, desired_sig) (spec, nt_rule_list, rule, nt_to_sigs, nt_sig_to_expr) in

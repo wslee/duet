@@ -27,7 +27,7 @@ let filter_sexps_for tag sexps =
 
 let sexp_to_type sexp = 
 	match sexp with 
-	| Sexp.List _ (* BitVec *) -> BV 
+	| Sexp.List _ (* BitVec [bit-width] *) -> BV 
 	| Sexp.Atom s -> 
 		if (String.compare s "Int") = 0 then Int
 		else if (String.compare s "String") = 0 then String
@@ -36,8 +36,8 @@ let sexp_to_type sexp =
 
 let sexp_to_const sexp = 
 	let str = Sexp.to_string sexp in 
-	if (String.compare str "true") = 0 then Const (CBool true)
-	else if (String.compare str "false") = 0 then Const (CBool false)
+	if (String.compare str "true") = 0 then Const (CBool (Concrete true))
+	else if (String.compare str "false") = 0 then Const (CBool (Concrete false))
 	else if (BatString.starts_with str "#x") then 
 		Const (CBV (Int64.of_string ("0" ^ (BatString.lchop ~n:1 str))))
 	else if (BatString.starts_with str "#u") then 
@@ -119,7 +119,7 @@ let get_args_map args_data =
 (* 	 L[ A:bvlshr A:x A:#x0000000000000001]  *)
 (*  ] *)
 
-(* return: string -> Exprs.expr (with Param) *)
+(* return: (string, Exprs.expr (with Param)) BatMap.t *)
 (* TODO: in case where other definitions used in a definition *)
 let process_definitions defs_data =
 	BatSet.fold (fun def_data m -> 
@@ -244,8 +244,7 @@ let process_forall_vars forall_vars_data =
 (* return: spec as Exprs.expr *)
 let process_constraints grammar target_function_name constraints_data macro_instantiator id2var =
 	BatSet.fold (fun constraint_data spec ->
-		let _ = assert ((BatList.length constraint_data) = 1) in
-		let constraint_data = BatList.nth constraint_data 0 in
+		let constraint_data = try BatList.hd constraint_data with _ -> assert false in
 		(* forall_var_map : variable name -> Var(name, ty) *) 
 		let exp = sexp_to_expr constraint_data id2var in
 		(* let _ = prerr_endline (string_of_expr exp) in *)
@@ -286,8 +285,9 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				in 
 				let _ = Specification.forall_var_map := forall_var_map in 
 				Specification.add_trivial_examples grammar spec
-			else failwith ("not supported: synth-fun is missing")
-		else failwith ("not supported: not a pbe/oracle spec")
+			else 
+				failwith ("Not supported: synth-fun is missing")
+		else failwith ("Not supported: not a SyGuS-pbe specification")
 	) constraints_data Specification.empty_spec
 
 let parse file = 
@@ -320,13 +320,20 @@ let parse file =
 	(* 	prerr_endline (sexpstr_of_fun name expr)  *)
 	(* ) macro_instantiator;                       *)
 	let synth_funs_data = filter_sexps_for "synth-fun" sexps in
-	let _ = if (BatSet.cardinal synth_funs_data) > 1 then failwith "Multi-function synthesis is not supported." in 
-	let target_function_name, grammar = process_synth_funcs (BatSet.choose synth_funs_data) in 
+	let _ =
+		if (BatSet.cardinal synth_funs_data) = 0 then
+			failwith "No target function to be synthesized is given."
+		else if (BatSet.cardinal synth_funs_data) > 1 then 
+			failwith "Multi-function synthesis is not supported." 
+	in 
+	let target_function_name, grammar = 
+		process_synth_funcs (BatSet.choose synth_funs_data) 
+	in 
 	(* prerr_endline (Grammar.string_of_grammar grammar); *)
 	let forall_vars_data = filter_sexps_for "declare-var" sexps in
 	let id2var = process_forall_vars forall_vars_data in  
 	let constraints_data = filter_sexps_for "constraint" sexps in
 	(* prerr_endline (string_of_list string_of_sexp (BatSet.choose constraints_data)); *)
 	let spec = process_constraints grammar target_function_name constraints_data macro_instantiator id2var in
-	prerr_endline (Specification.string_of_io_spec spec);
+	my_prerr_endline (Specification.string_of_io_spec spec);
 	(macro_instantiator, target_function_name, grammar, !Specification.forall_var_map, spec)  

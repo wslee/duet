@@ -83,6 +83,13 @@ let ret_type_of_op rule =
 	else if (String.compare op "%") = 0 then Int 
 	else failwith ("not supported operator: " ^ op)		 	   
 
+
+let exclude_ite_rules nt_rule_list =  
+	List.filter (fun (nt, rule) -> 
+		not (BatString.equal "ite" (try op_of_rule rule with _ -> ""))
+	) nt_rule_list
+
+								
 let is_commutative_rule rule =
   match rule with
   | FuncRewrite (op, _) ->
@@ -95,6 +102,11 @@ let is_nt_rule rule =
 	| NTRewrite _ -> true 
 	| _ -> false
 	
+let is_equal_nt nt nt' = 
+	match nt, nt' with 
+	| NTRewrite s, NTRewrite s' -> BatString.equal s s'
+	| _ -> false
+ 
 let is_function_rule rule =
 	match rule with 
 	| FuncRewrite _ -> true 
@@ -132,7 +144,13 @@ let rec size_of_rewrite rewrite =
 		List.fold_left (fun size rewrite -> size + (size_of_rewrite rewrite)) 1 rewrites  	
 
 let compare_rewrite r1 r2 = 
-	String.compare (string_of_rewrite r1) (string_of_rewrite r2)  
+	(* STR operators precedes LIA operators (.e.,g +, -) *)
+	(* WHY? *)
+	(*   In STR benchmarks, *)
+	(*   I observed LIA witness functions often keep generating hopeless subspecs *)
+	(*   wasiting resources. But STR witness functions often generate proper subspecs. *)
+	(*   Therefore, we prioritize production rules. STR operators first. *)
+	String.compare (string_of_rewrite r2) (string_of_rewrite r1)  
 
 module NTNode = struct
 	type t = rewrite (* non-terminal *) 
@@ -148,6 +166,11 @@ module NTTopology = Topological.Make(NTGraph)
 (* the list follows the topological order in the graph of non-terminals*)
 (* e.g., having a rule N1 -> f(N2), N2 comes before N1 *)
 let get_nt_rule_list grammar =
+	let nt_rule_list =
+		BatMap.foldi (fun nt rules lst ->
+			BatSet.fold (fun rule lst -> (nt, rule) :: lst) rules lst
+		) grammar []
+	in
 	let ntgraph = 
 		BatMap.foldi (fun nt rules g ->
 			BatSet.fold (fun rule g ->
@@ -165,9 +188,10 @@ let get_nt_rule_list grammar =
 		) ntgraph []
 	in   
 	List.map (fun nt -> 
-		(try BatMap.find nt grammar with _ -> failwith (string_of_rewrite nt)) 
-		|> BatSet.elements 
-		|> List.map (fun rule -> (nt, rule))
+		List.filter (fun (nt', _) -> is_equal_nt nt nt') nt_rule_list
+		(* (try BatMap.find nt grammar with _ -> failwith (string_of_rewrite nt))  *)
+		(* |> BatSet.elements                                                      *)
+		(* |> List.map (fun rule -> (nt, rule))                                    *)
 	) topological_sorted_nts |> List.flatten 
 	
 
