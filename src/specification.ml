@@ -34,8 +34,11 @@ type t = ((const list) * const) list
 
 let empty_spec = []
 
-let add_io_spec (inputs, output) spec =
-	((inputs, output) :: spec) 
+let add_io_spec (inputs, output) spec = 
+	if (List.mem (inputs, output) spec) then spec 
+	else 
+		spec @ [(inputs, output)]
+	(* ((inputs, output) :: spec)  *)
 
 let string_of_io_spec spec = 
 	string_of_list (fun (inputs, output) ->

@@ -20,10 +20,11 @@ let filter_sexps_for tag sexps =
 		| Sexp.List sexps' -> 
 			if (BatList.length sexps') > 0 && 
 				 (String.compare (Sexp.to_string (BatList.hd sexps')) tag) = 0 then 
-				 BatSet.add (BatList.remove_at 0 sexps')  acc
+				 (* BatSet.add (BatList.remove_at 0 sexps')  acc *)
+				 acc @ [(BatList.remove_at 0 sexps')] 
 			else acc 
 		| _ -> acc  
-	) BatSet.empty sexps
+	) [] (*BatSet.empty*) sexps
 
 let sexp_to_type sexp = 
 	match sexp with 
@@ -122,7 +123,7 @@ let get_args_map args_data =
 (* return: (string, Exprs.expr (with Param)) BatMap.t *)
 (* TODO: in case where other definitions used in a definition *)
 let process_definitions defs_data =
-	BatSet.fold (fun def_data m -> 
+	BatList.fold_left (fun m def_data -> 
   	let _ = assert ((BatList.length def_data) = 4) in  
   	let (name_data, args_data, ret_type_data, body_data) = 
   		(BatList.nth def_data 0, BatList.nth def_data 1, 
@@ -142,7 +143,7 @@ let process_definitions defs_data =
 		in
 		(* prerr_endline (Printf.sprintf "%s -> %s" name (Exprs.string_of_expr expr));  *)
 		BatMap.add name expr m     
-	) defs_data BatMap.empty 	
+	) BatMap.empty defs_data  	
 	
 (* (synth-fun SC ((s (BitVec 4)) (t (BitVec 4))) Bool                                                                                                                                                                           *)
 (*     ((Start Bool (true false (not Start) (and Start Start) (or Start Start) *)
@@ -225,7 +226,7 @@ let process_synth_funcs synth_fun_data =
 	
 (* return: name -> Var expr *)
 let process_forall_vars forall_vars_data =
-	BatSet.fold (fun forall_var_data m ->
+	BatList.fold_left (fun m forall_var_data ->
 		let _ = assert ((BatList.length forall_var_data) = 2) in  
   	let (name_data, type_data) = 
   		(BatList.nth forall_var_data 0, BatList.nth forall_var_data 1)
@@ -234,7 +235,7 @@ let process_forall_vars forall_vars_data =
 		let ty = sexp_to_type type_data in
 		(* set up the domain. the range will be determined later *) 
 		BatMap.add name (Var(name, ty)) m 
-	) forall_vars_data BatMap.empty   
+	) BatMap.empty forall_vars_data    
 
 (* (constraint (= (hd01 x) (f x))) *)
 (* [L[ A:= L[ A:hd20 A:x] L[ A:f A:x]]] *)
@@ -243,7 +244,7 @@ let process_forall_vars forall_vars_data =
 (* currently, only for PBE *)
 (* return: spec as Exprs.expr *)
 let process_constraints grammar target_function_name constraints_data macro_instantiator id2var =
-	BatSet.fold (fun constraint_data spec ->
+	BatList.fold_left (fun spec constraint_data ->
 		let constraint_data = try BatList.hd constraint_data with _ -> assert false in
 		(* forall_var_map : variable name -> Var(name, ty) *) 
 		let exp = sexp_to_expr constraint_data id2var in
@@ -288,7 +289,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			else 
 				failwith ("Not supported: synth-fun is missing")
 		else failwith ("Not supported: not a SyGuS-pbe specification")
-	) constraints_data Specification.empty_spec
+	) Specification.empty_spec constraints_data 
 
 let parse file = 
 	Random.self_init(); 
@@ -321,13 +322,13 @@ let parse file =
 	(* ) macro_instantiator;                       *)
 	let synth_funs_data = filter_sexps_for "synth-fun" sexps in
 	let _ =
-		if (BatSet.cardinal synth_funs_data) = 0 then
+		if (BatList.is_empty synth_funs_data) then
 			failwith "No target function to be synthesized is given."
-		else if (BatSet.cardinal synth_funs_data) > 1 then 
+		else if (BatList.length synth_funs_data) > 1 then 
 			failwith "Multi-function synthesis is not supported." 
 	in 
 	let target_function_name, grammar = 
-		process_synth_funcs (BatSet.choose synth_funs_data) 
+		process_synth_funcs (BatList.hd synth_funs_data) 
 	in 
 	(* prerr_endline (Grammar.string_of_grammar grammar); *)
 	let forall_vars_data = filter_sexps_for "declare-var" sexps in

@@ -168,7 +168,18 @@ let rec choose_best_from_vsa vsa =
 	| Join (rule, vsa_list) ->
 		Function (op_of_rule rule, (BatList.map choose_best_from_vsa vsa_list), ret_type_of_op rule) 
 	| Empty -> raise NoSolInVSA	 
-		 		
+
+let covered_pts spec expr desired_sig =
+	try  
+  	let sg = Exprs.compute_signature spec expr in
+  	List.fold_left (fun pts ((const, desired_const), i) -> 
+  		if (Pervasives.compare const desired_const) = 0 then 
+  			BatSet.add i pts 
+  		else pts 
+  	) BatSet.empty 
+  		(BatList.combine (BatList.combine sg desired_sig) (BatList.range 0 `To ((List.length desired_sig) - 1))) 
+	with Exprs.UndefinedSemantics -> BatSet.empty  
+						 		
 let not_covered nt_sigs desired_sig =
 	let desired_sig_opt = BatList.map (fun x -> Some x) desired_sig in
 	try 

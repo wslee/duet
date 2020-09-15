@@ -37,6 +37,7 @@ let rec learn (available_height, available_size) (nt, desired_sig)
   	let result =
   		(* terminal node *)   
     	if (BatMap.mem (nt, desired_sig) nt_sig_to_expr) then
+				let _ = my_prerr_endline (Printf.sprintf "Direct : %s" (Exprs.string_of_expr (BatMap.find (nt, desired_sig) nt_sig_to_expr))) in 
     		Direct (BatMap.find (nt, desired_sig) nt_sig_to_expr) 
     	else 
     		let vsas = 
@@ -138,7 +139,7 @@ and learn_rule (available_height, available_size) (nt, desired_sig)
 				(*   nt_i is i-th parameter non-terminal *)
 				(*   sig_i is the desired signature of nt_i *)
     		let nt_sig_lists =
-					learn_paths 0 rule nts desired_sig total_sigs nt_to_sigs BatSet.empty
+					learn_paths available_height 0 rule nts desired_sig total_sigs nt_to_sigs BatSet.empty
 				in
     		if (BatSet.is_empty nt_sig_lists) then Empty 
     		else 
@@ -180,7 +181,7 @@ and learn_rule (available_height, available_size) (nt, desired_sig)
 and learn_for_each pts (available_height, available_size) (nt, desired_sig) 
 							(spec, nt_rule_list, rule, total_sigs, nt_to_sigs, nt_sig_to_expr) = 
 	let f (available_height, available_size) i =
-		(* let _ = 	                                                           *)
+		(* let _ =                                                              *)
 		(* 	if (Pervasives.compare (snd !goal) desired_sig) = 0 then           *)
 		(* 		prerr_endline (Printf.sprintf "trying %s -> %s"                  *)
 		(* 			(string_of_list Exprs.string_of_const (fst (List.nth spec i))) *)
@@ -215,18 +216,24 @@ and learn_for_each pts (available_height, available_size) (nt, desired_sig)
     				(nt, [List.nth desired_sig i]) 
     				([List.nth spec i], nt_rule_list, total_sigs, nt_to_sigs, nt_sig_to_expr)
 		in
-		(* prerr_endline (string_of_sig  [List.nth desired_sig 0]); *)
+		(* prerr_endline (string_of_sig  [List.nth desired_sig 0]);                                                                       *)
 		(* if (Pervasives.compare (snd !goal) desired_sig) = 0 then                                                                       *)
 		(* 	prerr_endline (Printf.sprintf "trying %s learned: %s" (Exprs.string_of_const (List.nth desired_sig i)) (string_of_vsa vsa)); *)
 		vsa
 	in
-	let _, _, vsa_list = 
-		List.fold_left (fun (available_height, available_size, vsa_list) i ->
-			let vsa = f (available_height, available_size) i in
-			let _ = if vsa = Empty then raise LearnForEachFailure in 
-			let lb, _ = pgm_size_of_vsa vsa in
-			(available_height, available_size - lb, vsa_list @ [vsa])    
-	  ) (available_height, available_size, []) pts 
+	let _, _, _, vsa_list = 
+		List.fold_left (fun (already_covered, available_height, available_size, vsa_list) i ->
+			if (BatSet.mem i already_covered) then 
+				(already_covered, available_height, available_size, vsa_list) 
+			else  
+  			let vsa = f (available_height, available_size) i in
+  			let _ = if vsa = Empty then raise LearnForEachFailure in 
+  			let lb, _ = pgm_size_of_vsa vsa in
+				let expr = choose_best_from_vsa vsa in 
+				let covered = covered_pts spec expr desired_sig in
+				let already_covered = BatSet.union covered already_covered in    
+  			(already_covered, available_height, available_size - lb, vsa_list @ [vsa])    
+	  ) (BatSet.empty, available_height, available_size, []) pts 
 	in
 	vsa_list
 		
@@ -240,7 +247,7 @@ and learn_ite (available_height, available_size) (nt, desired_sig)
 	try
 	let nt_ty = type_of_signature desired_sig in 
 	let bool_nt = BatList.hd (get_nts rule) in
-	let _ = 	
+	let _ = 
 		if (Pervasives.compare (snd !goal) desired_sig) = 0 then
 			my_prerr_endline (Printf.sprintf "learn_ite %s" (string_of_sig desired_sig))
 	in
@@ -388,14 +395,14 @@ and learn_ite (available_height, available_size) (nt, desired_sig)
 		(** - synthesize predicates in case of insufficiency *)
 		(** - effective for synthesis problems of finite domains (e.g., strings) *)
 		if !Options.lbu then
-  		let (_, _, _, bool_sigs) = total_sigs in
+  		let bool_sigs = BatMap.find bool_nt nt_to_sigs in 
   		learnite_lbu (BatList.range 0 `To ((List.length desired_sig) - 1)) bool_sigs
 		else
 		(** learning ite expression with decision-tree learning *)
 		(** - do NOT synthesize predicates; just give up in case of insufficiency *)
 		(** - effective for synthesis problems of virtually infinite domains (e.g., BV, LIA) *)
 		let pts_indices = (BatList.range 0 `To ((List.length desired_sig) - 1)) in
-		let (_, _, _, bool_sigs) = total_sigs in
+		let bool_sigs = BatMap.find bool_nt nt_to_sigs in
 		(* cover : signature -> int BatSet.t *)
 		(* (set of indices of inputs with correct outputs) *)
     let cover : (signature, int BatSet.t) BatMap.t =
@@ -478,9 +485,7 @@ and learn_ite (available_height, available_size) (nt, desired_sig)
       			BatSet.union sigs total_sigs
       		) nt_to_sigs BatSet.empty
       	in
-				let bool_sigs =
-					BatSet.filter (fun sg -> (type_of_signature sg) = Bool) total_sigs
-				in
+				let bool_sigs = BatMap.find bool_nt nt_to_sigs in 
 				iterative_learn_dt (pred_size + 1) (pts_indices, bool_sigs)
     			(available_height, available_size) (nt, desired_sig)
     			(spec, nt_rule_list, rule, nt_to_sigs, nt_sig_to_expr)
@@ -516,7 +521,7 @@ and learn_ite (available_height, available_size) (nt, desired_sig)
 		Empty
 		
 		
-and learn_paths i rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists =
+and learn_paths available_height i rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists =
 	let op = op_of_rule rule in 
 	my_prerr_endline (Printf.sprintf "Processing %d-th arg of %s" i op);
 	let nt_sig_lists : ((rewrite * const list) list) BatSet.t = nt_sig_lists in 
@@ -525,11 +530,11 @@ and learn_paths i rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists =
 		(* assumption : all the function rules are with just sygus builtins *)
 		let nt = List.hd nts in 
 		let nt_sigs = (BatMap.find nt nt_to_sigs) in 
-		let arg_sigs = witness nt_sigs total_sigs rule desired_sig [] in
+		let arg_sigs = witness available_height nt_sigs total_sigs rule desired_sig [] in
 		let nt_sig_lists : ((rewrite * const list) list) BatSet.t = 
 			set_map (fun arg_sig -> [(nt, arg_sig)]) arg_sigs 
 		in
-		learn_paths (i + 1) rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists  
+		learn_paths available_height (i + 1) rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists  
 	(* done *)
 	else if (i >= (BatList.length nts)) then
 		(* remove cases where some arguments could not be learned *) 
@@ -545,7 +550,7 @@ and learn_paths i rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists =
 			BatSet.fold (fun nt_sig_list acc ->
 				if (BatList.length nt_sig_list) = i then
 					let next_arg_sigs = 
-						witness nt_sigs total_sigs rule desired_sig (List.map snd nt_sig_list) 
+						witness available_height nt_sigs total_sigs rule desired_sig (List.map snd nt_sig_list) 
 					in
 					let _ =
 						my_prerr_endline
@@ -560,7 +565,7 @@ and learn_paths i rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists =
 				else acc 
 			) nt_sig_lists nt_sig_lists
 		in
-		learn_paths (i + 1) rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists  
+		learn_paths available_height (i + 1) rule nts desired_sig total_sigs nt_to_sigs nt_sig_lists  
 		
 	
 let init () = 
@@ -672,7 +677,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 					try  
 						learn (max_height, !Options.max_size) (Grammar.start_nt, desired_sig) 
 							(spec, nt_rule_list, total_sigs, nt_to_sigs, nt_sig_to_expr) 
-					with VSAFound vsas -> BatSet.choose vsas  
+					with VSAFound vsas -> Union vsas
 					| exn -> failwith (Printexc.to_string exn) 
 				in
       	my_prerr_endline ("VSA has been computed");

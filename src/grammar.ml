@@ -84,6 +84,30 @@ let ret_type_of_op rule =
 	else failwith ("not supported operator: " ^ op)		 	   
 
 
+(* to determine which kinds of witness functions are used *)
+let witness_type_of_op rule =
+	let op = op_of_rule rule in 
+	(** BV and STRING *)
+	if (BatString.starts_with op "bv") then BV 
+	else if (BatString.exists op "str") then String 
+	(** Bool theory **)
+	else if (String.compare op "and") = 0 then Bool
+	else if (String.compare op "or") = 0 then Bool
+	else if (String.compare op "xor") = 0 then Bool
+	else if (String.compare op "not") = 0 then Bool
+	(** LIA theory **)
+	else Int 
+	(* else if (String.compare op "<") = 0 then Int        *)
+	(* else if (String.compare op ">") = 0 then Int        *)
+	(* else if (String.compare op "<=") = 0 then Int       *)
+	(* else if (String.compare op ">=") = 0 then Int       *)
+	(* else if (String.compare op "+") = 0 then Int        *)
+	(* else if (String.compare op "-") = 0 then Int        *)
+	(* else if (String.compare op "*") = 0 then Int        *)
+	(* else if (String.compare op "/") = 0 then Int        *)
+	(* else if (String.compare op "%") = 0 then Int        *)
+	(* else failwith ("not supported operator: " ^ op)		 *)
+
 let exclude_ite_rules nt_rule_list =  
 	List.filter (fun (nt, rule) -> 
 		not (BatString.equal "ite" (try op_of_rule rule with _ -> ""))
