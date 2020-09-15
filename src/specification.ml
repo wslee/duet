@@ -82,7 +82,7 @@ let verify sol spec =
 				(Exprs.string_of_expr !oracle_expr_resolved)
 				(Exprs.string_of_expr sol)  
 		in
-		prerr_endline str;
+		my_prerr_endline str;
 	  let exprSMT = Z3.SMT.parse_smtlib2_string ctx str [] [] [] [] in
 		let sat = Z3.AST.ASTVector.to_expr_list exprSMT in
   	let solver = (Z3.Solver.mk_solver ctx None) in
