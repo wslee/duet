@@ -61,8 +61,8 @@ let main () =
 			my_prerr_endline ("****** solution *******");
 			(* prerr_endline (Exprs.string_of_expr sol); *)
 			prerr_endline (Exprs.sexpstr_of_fun target_function_name sol);
-			my_prerr_endline ("size : " ^ (string_of_int (Exprs.size_of_expr sol)));
-			my_prerr_endline ("time : " ^ (Printf.sprintf "%.2f sec" (Sys.time() -. start)));
+			prerr_endline ("size : " ^ (string_of_int (Exprs.size_of_expr sol)));
+			prerr_endline ("time : " ^ (Printf.sprintf "%.2f sec" (Sys.time() -. start)));
 			(* prerr_endline ("check dist time : " ^ (Printf.sprintf "%.2f sec" (!Witness.check_dist_time))); *)
 			()
 		 
