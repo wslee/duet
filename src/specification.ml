@@ -113,6 +113,9 @@ let verify sol spec =
     					BatMap.add (Z3.Symbol.to_string symbol) value acc
     				) BatMap.empty decls 
 					in 
+					let _ = if (BatMap.is_empty m) then
+						failwith "Z3 returns the empty model. Check out if (DY)LD_LIBRARY_PATH includes a path to the Z3 folder." 
+					in 
 					let param_ids = 
 						List.map 
 							(fun i -> Exprs.string_of_expr (Exprs.Param (i, Bool))) 

@@ -28,92 +28,77 @@ let int64_to_string_in_binary bv =
 (** BV theory **)  
 let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs) rule output_sig arg_sigs =
 	let op = Grammar.op_of_rule rule in
+	let n_sigs = BatSet.cardinal nt_sigs in
 	if (String.compare op "bvadd") = 0 then
 		if (BatList.length arg_sigs) = 0 then
-			BatSet.filter (fun arg0_sig ->
-				let arg1_sig = fun_apply_signature "bvsub" [output_sig; arg0_sig] in
-				BatSet.mem arg1_sig bv_sigs
-			) nt_sigs
-			(* BatSet.filter (fun arg0_sig ->                                  *)
-			(* 	BatList.for_all (fun (arg0_const, output_const) ->            *)
-			(* 		let arg0_v = get_bv arg0_const in                           *)
-			(* 		let output_v = get_bv output_const in                       *)
-			(* 		let arg1_v = (Int64.sub output_v arg0_v) in                 *)
-			(* 		(* to prevent from generating the same sub problem *)       *)
-			(* 		(Int64.compare (Int64.abs arg1_v) (Int64.abs output_v)) < 0 *)
-			(* 	) (BatList.combine arg0_sig output_sig)                       *)
-			(* )                                                               *)
-			(* nt_sigs                                                         *)
+			if (is_not_fresh n_sigs op) then 
+  			BatSet.filter (fun arg0_sig ->
+  				let arg1_sig = fun_apply_signature "bvsub" [output_sig; arg0_sig] in
+  				BatSet.mem arg1_sig bv_sigs
+  			) nt_sigs
+			else 
+  			BatSet.filter (fun arg0_sig ->
+  				BatList.for_all (fun (arg0_const, output_const) ->
+  					let arg0_v = get_bv arg0_const in
+  					let output_v = get_bv output_const in
+  					let arg1_v = (Int64.sub output_v arg0_v) in
+  					check_ratio available_height output_v arg1_v
+  				) (BatList.combine arg0_sig output_sig)
+  			)
+  			nt_sigs
 		else
 			let arg0_sig = List.nth arg_sigs 0 in
 			let arg1_sig =
-  			BatSet.filter (fun arg1_sig ->
-  				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-  					let arg0_v = get_bv arg0_const in
-  					let arg1_v = get_bv arg1_const in
-  					let output_v = get_bv output_const in
-  					(Int64.equal (Int64.add arg0_v arg1_v) output_v)
-  				) (BatList.combine arg0_sig arg1_sig) output_sig
-  			) nt_sigs
+  			BatList.fold_left (fun acc (arg0_const, output_const) ->
+  				let arg0_v = get_bv arg0_const in
+  				let output_v = get_bv output_const in
+  				let arg1_v = (Int64.sub output_v arg0_v) in
+					acc @ [(CBV arg1_v)]
+  			) [] (BatList.combine arg0_sig output_sig)
 			in
-			arg1_sig
-			(* if not (BatSet.is_empty arg1_sig) then arg1_sig                    *)
-			(* else                                                               *)
-				
-				(* let arg1_sig =                                             *)
-    		(* 	BatList.fold_left (fun acc (arg0_const, output_const) -> *)
-    		(* 		let arg0_v = get_bv arg0_const in                      *)
-    		(* 		let output_v = get_bv output_const in                  *)
-    		(* 		let arg1_v = (Int64.sub output_v arg0_v) in            *)
-  			(* 		acc @ [(CBV arg1_v)]                                   *)
-    		(* 	) [] (BatList.combine arg0_sig output_sig)               *)
-				(* in                                                         *)
-				(* (* if (check_distance arg1_sig output_sig bv_sigs) then *) *)
-				(* 	BatSet.singleton arg1_sig                                *)
-				(* (* else           *)                                       *)
-				(* (* 	BatSet.empty *)                                       *)
+			BatSet.singleton arg1_sig
 				
 	else if (String.compare op "bvsub") = 0 then
 		if (BatList.length arg_sigs) = 0 then
-			BatSet.filter (fun arg0_sig ->
-				let arg1_sig = fun_apply_signature "bvsub" [arg0_sig; output_sig] in 
-				BatSet.mem arg1_sig bv_sigs
-			) bv_sigs
-			(* BatSet.filter (fun arg0_sig ->                       *)
-			(* 	BatList.for_all (fun (arg0_const, output_const) -> *)
-			(* 		let arg0_v = get_bv arg0_const in                *)
-			(* 		let output_v = get_bv output_const in            *)
-			(* 		(* let arg1_v = Int64.sub arg0_v output_v in  *) *)
-			(* 		(not (Int64.equal output_v Int64.zero))          *)
-			(* 	) (BatList.combine arg0_sig output_sig)            *)
-			(* ) bv_sigs                                            *)
+			if (is_not_fresh n_sigs op) then
+  			BatSet.filter (fun arg0_sig ->
+  				let arg1_sig = fun_apply_signature "bvsub" [arg0_sig; output_sig] in
+  				BatSet.mem arg1_sig bv_sigs
+  			) nt_sigs
+			else
+  			BatSet.filter (fun arg0_sig ->
+  				BatList.for_all (fun (arg0_const, output_const) ->
+  					let arg0_v = get_bv arg0_const in
+  					let output_v = get_bv output_const in
+  					let arg1_v = Int64.sub arg0_v output_v in
+  					check_ratio available_height output_v arg1_v
+  					(* (not (Int64.equal output_v Int64.zero)) *)
+  				) (BatList.combine arg0_sig output_sig)
+  			) nt_sigs
 		else
 			let arg0_sig = List.nth arg_sigs 0 in
+			(* if (is_not_fresh n_sigs op) then                                     *)
+  		(* 	let arg1_sig =                                                     *)
+    	(* 		BatSet.filter (fun arg1_sig ->                                   *)
+    	(* 			BatList.for_all2 (fun (arg0_const, arg1_const) output_const -> *)
+    	(* 				let arg0_v = get_bv arg0_const in                            *)
+    	(* 				let arg1_v = get_bv arg1_const in                            *)
+    	(* 				let output_v = get_bv output_const in                        *)
+    	(* 				(Int64.equal (Int64.sub arg0_v arg1_v) output_v)             *)
+    	(* 			) (BatList.combine arg0_sig arg1_sig) output_sig               *)
+    	(* 		) nt_sigs                                                        *)
+  		(* 	in                                                                 *)
+  		(* 	arg1_sig                                                           *)
+			(* else                                                                 *)
 			let arg1_sig =
-  			BatSet.filter (fun arg1_sig ->
-  				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-  					let arg0_v = get_bv arg0_const in
-  					let arg1_v = get_bv arg1_const in
-  					let output_v = get_bv output_const in
-  					(Int64.equal (Int64.sub arg0_v arg1_v) output_v)
-  				) (BatList.combine arg0_sig arg1_sig) output_sig
-  			) nt_sigs
+  			BatList.fold_left (fun acc (arg0_const, output_const) ->
+  				let arg0_v = get_bv arg0_const in
+  				let output_v = get_bv output_const in
+  				let arg1_v = (Int64.sub arg0_v output_v) in
+					acc @ [(CBV arg1_v)]
+  			) [] (BatList.combine arg0_sig output_sig)
 			in
-			arg1_sig
-			(* if not (BatSet.is_empty arg1_sig) then arg1_sig              *)
-			(* else                                                         *)
-			(* 	let arg1_sig =                                             *)
-    	(* 		BatList.fold_left (fun acc (arg0_const, output_const) -> *)
-    	(* 			let arg0_v = get_bv arg0_const in                      *)
-    	(* 			let output_v = get_bv output_const in                  *)
-    	(* 			let arg1_v = (Int64.sub arg0_v output_v) in            *)
-  		(* 			acc @ [(CBV arg1_v)]                                   *)
-    	(* 		) [] (BatList.combine arg0_sig output_sig)               *)
-			(* 	in                                                         *)
-			(* 	if (check_distance arg1_sig output_sig bv_sigs) then	     *)
-			(* 		BatSet.singleton arg1_sig                                *)
-			(* 	else                                                       *)
-			(* 		BatSet.empty                                             *)
+			BatSet.singleton arg1_sig
 	else if (String.compare op "bvneg") = 0 then
 		let arg0_sigs = 
 		BatSet.filter (fun arg0_sig ->
@@ -174,7 +159,6 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
 					(Int64.equal (Int64.rem output_v arg0_v) Int64.zero) &&  (* output | arg0 *)
 					(Int64.compare (Int64.abs arg0_v) (Int64.abs output_v)) < 0 && (* |arg0| < |output| *)
 					(Int64.compare (Int64.div output_v arg0_v) (Int64.abs output_v)) < 0 (* |arg1| < |output| *)
-					(* (check_ratio (Int64.div output_v arg0_v) output_v)  *)
 				) (BatList.combine arg0_sig output_sig)
 			) nt_sigs
 		(* else                                                               *)
@@ -478,7 +462,7 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
 					) (BatList.range 0 `To 63)
 				) (BatList.combine arg0_sig output_sig)
 			) nt_sigs
-			(* BatList.fold_left (fun acc i ->                                         *)
+			(* BatList.fold_left (fun acc i ->                                        *)
 			(* 	try                                                                   *)
   		(* 		let arg0_sig =                                                      *)
   		(* 			BatList.map (fun output_const ->                                  *)
@@ -492,34 +476,33 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
   		(* 		in                                                                  *)
   		(* 		BatSet.add arg0_sig acc                                             *)
 			(* 	with _ -> acc                                                         *)
-			(* ) BatSet.empty (BatList.range 1 `To 63)                                 *)
+			(* ) BatSet.empty (BatList.range 1 `To 63)                                *)
 		else  
 			let arg0_sig = List.nth arg_sigs 0 in
-			BatSet.filter (fun arg1_sig ->
-				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					let arg0_v = get_bv arg0_const in
-					let arg1_v = Int64.to_int (get_bv arg1_const) in
-					let output_v = get_bv output_const in
-					Int64.equal (Int64.shift_right arg0_v arg1_v) output_v
-				) (BatList.combine arg0_sig arg1_sig) output_sig
-			) nt_sigs
-			(* let arg0_sig = List.nth arg_sigs 0 in                                                                                                                                                                                                                                                      *)
-			(* BatList.fold_left (fun acc (arg0_const, output_const) ->                                                                                                                                                                                                                                   *)
-			(* 	let arg0_v = get_bv arg0_const in                                                                                                                                                                                                                                                        *)
-			(* 	let output_v = get_bv output_const in                                                                                                                                                                                                                                                    *)
-			(* 	let rec iter i =                                                                                                                                                                                                                                                                         *)
-			(* 		if (i >= 64) then Int64.of_int i                                                                                                                                                                                                                                                       *)
-			(* 		else if (Int64.equal output_v (Int64.shift_right arg0_v i)) then                                                                                                                                                                                                                       *)
-			(* 			Int64.of_int i                                                                                                                                                                                                                                                                       *)
-			(* 		else iter (i + 1)                                                                                                                                                                                                                                                                      *)
-			(* 	in                                                                                                                                                                                                                                                                                       *)
-			(* 	let arg1_v = iter 0 in                                                                                                                                                                                                                                                                   *)
-			(* 	(* let i = Int64.to_float (Int64.div arg0_v output_v) in                                                                                                                                                                                                                              *) *)
-			(* 	(* let arg1_v = Int64.of_float ((log i) /. (log 2.0)) in                                                                                                                                                                                                                              *) *)
-			(* 	let _ = if not ((Int64.to_int arg1_v) >= 0 && (Int64.to_int arg1_v) <= 63) then                                                                                                                                                                                                          *)
-			(* 		failwith (Printf.sprintf "bvashr %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in                                                                              *)
-			(* 	acc @ [CBV (arg1_v)]                                                                                                                                                                                                                                                                     *)
-			(* ) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton                                                                                                                                                                                                                             *)
+			if (is_not_fresh n_sigs op) then 
+  			BatSet.filter (fun arg1_sig ->
+  				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
+  					let arg0_v = get_bv arg0_const in
+  					let arg1_v = Int64.to_int (get_bv arg1_const) in
+  					let output_v = get_bv output_const in
+  					Int64.equal (Int64.shift_right arg0_v arg1_v) output_v
+  				) (BatList.combine arg0_sig arg1_sig) output_sig
+  			) nt_sigs
+			else
+  			BatList.fold_left (fun acc (arg0_const, output_const) ->
+  				let arg0_v = get_bv arg0_const in
+  				let output_v = get_bv output_const in
+  				let rec iter i =
+  					if (i >= 64) then Int64.of_int i
+  					else if (Int64.equal output_v (Int64.shift_right arg0_v i)) then
+  						Int64.of_int i
+  					else iter (i + 1)
+  				in
+  				let arg1_v = iter 0 in
+  				let _ = if not ((Int64.to_int arg1_v) >= 0 && (Int64.to_int arg1_v) <= 63) then
+  					failwith (Printf.sprintf "bvashr %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in
+  				acc @ [CBV (arg1_v)]
+  			) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton
 	else if (String.compare op "bvlshr") = 0 then
 		if (BatList.length arg_sigs) = 0 then 
 			(* let arg0_sigs =                                                                      *)
@@ -569,32 +552,32 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
 			(* ) BatSet.empty (BatList.range 1 `To 63)                                       *)
 		else
 			let arg0_sig = List.nth arg_sigs 0 in
-			BatSet.filter (fun arg1_sig ->
-				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					let arg0_v = get_bv arg0_const in
-					let arg1_v = Int64.to_int (get_bv arg1_const) in
-					let output_v = get_bv output_const in
-					Int64.equal (Int64.shift_right_logical arg0_v arg1_v) output_v
-				) (BatList.combine arg0_sig arg1_sig) output_sig
-			) nt_sigs
-			  
-			(* let arg0_sig = List.nth arg_sigs 0 in                                                                                                                                                                                                                                                      *)
-			(* BatList.fold_left (fun acc (arg0_const, output_const) ->                                                                                                                                                                                                                                   *)
-			(* 	let arg0_v = get_bv arg0_const in                                                                                                                                                                                                                                                        *)
-			(* 	let output_v = get_bv output_const in                                                                                                                                                                                                                                                    *)
-			(* 	let rec iter i =                                                                                                                                                                                                                                                                         *)
-			(* 		if i > 64 then Int64.of_int i                                                                                                                                                                                                                                                          *)
-			(* 		else if (Int64.equal output_v (Int64.shift_right_logical arg0_v i)) then                                                                                                                                                                                                               *)
-			(* 			Int64.of_int i                                                                                                                                                                                                                                                                       *)
-			(* 		else iter (i + 1)                                                                                                                                                                                                                                                                      *)
-			(* 	in                                                                                                                                                                                                                                                                                       *)
-			(* 	let arg1_v = iter 0 in                                                                                                                                                                                                                                                                   *)
-			(* 	(* let i = Int64.to_float (Int64.div arg0_v output_v) in                                                                                                                                                                                                                              *) *)
-			(* 	(* let arg1_v = Int64.of_float ((log i) /. (log 2.0)) in                                                                                                                                                                                                                              *) *)
-			(* 	let _ = if not ((Int64.to_int arg1_v) >= 0 && (Int64.to_int arg1_v) <= 63) then                                                                                                                                                                                                          *)
-			(* 		failwith (Printf.sprintf "bvlshr %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in                                                                              *)
-			(* 	acc @ [CBV (arg1_v)]                                                                                                                                                                                                                                                                     *)
-			(* ) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton                                                                                                                                                                                                                             *)
+			if (is_not_fresh n_sigs op) then
+  			BatSet.filter (fun arg1_sig ->
+  				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
+  					let arg0_v = get_bv arg0_const in
+  					let arg1_v = Int64.to_int (get_bv arg1_const) in
+  					let output_v = get_bv output_const in
+  					Int64.equal (Int64.shift_right_logical arg0_v arg1_v) output_v
+  				) (BatList.combine arg0_sig arg1_sig) output_sig
+  			) nt_sigs
+			else
+  			BatList.fold_left (fun acc (arg0_const, output_const) ->
+  				let arg0_v = get_bv arg0_const in
+  				let output_v = get_bv output_const in
+  				let rec iter i =
+  					if i > 64 then Int64.of_int i
+  					else if (Int64.equal output_v (Int64.shift_right_logical arg0_v i)) then
+  						Int64.of_int i
+  					else iter (i + 1)
+  				in
+  				let arg1_v = iter 0 in
+  				(* let i = Int64.to_float (Int64.div arg0_v output_v) in                                                                                                                                                                                                                              *)
+  				(* let arg1_v = Int64.of_float ((log i) /. (log 2.0)) in                                                                                                                                                                                                                              *)
+  				let _ = if not ((Int64.to_int arg1_v) >= 0 && (Int64.to_int arg1_v) <= 63) then
+  					failwith (Printf.sprintf "bvlshr %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in
+  				acc @ [CBV (arg1_v)]
+  			) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton
 			
 	else if (String.compare op "bvshl") = 0 then
 		if (BatList.length arg_sigs) = 0 then 
@@ -648,31 +631,31 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
 			(* ) BatSet.empty (BatList.range 1 `To 63)                                 *)
 		else
 			let arg0_sig = List.nth arg_sigs 0 in
-			BatSet.filter (fun arg1_sig ->
-				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
-					let arg0_v = get_bv arg0_const in
-					let arg1_v = Int64.to_int (get_bv arg1_const) in
-					let output_v = get_bv output_const in
-					Int64.equal (Int64.shift_left arg0_v arg1_v) output_v
-				) (BatList.combine arg0_sig arg1_sig) output_sig
-			) nt_sigs
-			
-			(* let arg0_sig = List.nth arg_sigs 0 in                                                                                                                                                                        *)
-			(* BatList.fold_left (fun acc (arg0_const, output_const) ->                                                                                                                                                     *)
-			(* 	let arg0_v = get_bv arg0_const in                                                                                                                                                                          *)
-			(* 	let output_v = get_bv output_const in                                                                                                                                                                      *)
-			(* 	let rec iter i =                                                                                                                                                                                           *)
-			(* 		if (i >= 64) then failwith "bvshl"                                                                                                                                                                       *)
-			(* 		else if (Int64.equal output_v (Int64.shift_left arg0_v i)) then                                                                                                                                          *)
-			(* 			Int64.of_int i                                                                                                                                                                                         *)
-			(* 		else iter (i + 1)                                                                                                                                                                                        *)
-			(* 	in                                                                                                                                                                                                         *)
-			(* 	let arg1_v = iter 0 in                                                                                                                                                                                     *)
-			(* 	(* let i = Int64.to_float (Int64.div output_v arg0_v) in *)                                                                                                                                                *)
-			(* 	(* let arg1_v = Int64.of_float ((log i) /. (log 2.0)) in *)                                                                                                                                                *)
-			(* 	let _ = if not ((Int64.to_int arg1_v) >= 0 && (Int64.to_int arg1_v) <= 63) then                                                                                                                            *)
-			(* 		failwith (Printf.sprintf "bvshl %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in *)
-			(* 	acc @ [CBV (arg1_v)]                                                                                                                                                                                       *)
-			(* ) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton                                                                                                                                               *)
+			if (is_not_fresh n_sigs op) then
+  			BatSet.filter (fun arg1_sig ->
+  				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
+  					let arg0_v = get_bv arg0_const in
+  					let arg1_v = Int64.to_int (get_bv arg1_const) in
+  					let output_v = get_bv output_const in
+  					Int64.equal (Int64.shift_left arg0_v arg1_v) output_v
+  				) (BatList.combine arg0_sig arg1_sig) output_sig
+  			) nt_sigs
+			else
+  			BatList.fold_left (fun acc (arg0_const, output_const) ->
+  				let arg0_v = get_bv arg0_const in
+  				let output_v = get_bv output_const in
+  				let rec iter i =
+  					if (i >= 64) then failwith "bvshl"
+  					else if (Int64.equal output_v (Int64.shift_left arg0_v i)) then
+  						Int64.of_int i
+  					else iter (i + 1)
+  				in
+  				let arg1_v = iter 0 in
+  				(* let i = Int64.to_float (Int64.div output_v arg0_v) in *)
+  				(* let arg1_v = Int64.of_float ((log i) /. (log 2.0)) in *)
+  				let _ = if not ((Int64.to_int arg1_v) >= 0 && (Int64.to_int arg1_v) <= 63) then
+  					failwith (Printf.sprintf "bvshl %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in
+  				acc @ [CBV (arg1_v)]
+  			) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton
 	else 
 		failwith (Printf.sprintf "unsupported op: %s" op)

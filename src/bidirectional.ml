@@ -45,12 +45,18 @@ let rec learn (available_height, available_size) (nt, desired_sig)
     				(* if (Pervasives.compare nt nt') = 0 then *)
   					if (is_equal_nt nt nt') then
   						(* Rule: A -> F(B, C)  *)
-    					if (is_function_rule rule) then 
+    					if (is_function_rule rule) then
+								let op = op_of_rule rule in  
             		let vsa = 
       						learn_rule (available_height, available_size) (nt, desired_sig) 
   									(spec, nt_rule_list, rule, total_sigs, nt_to_sigs, nt_sig_to_expr)
       					in 
             		if (vsa <> Empty) then
+									let _ =
+										(* if (available_height > 1) then                                              *)
+										(* 	prerr_endline (Printf.sprintf "learn_rule success %s" (op_of_rule rule))  *)
+										add_learn_rule_cache true op
+									in
   								let _ =
   									(* if the user wants to find a "single" solution, stop *)
   									if (Pervasives.compare (nt, desired_sig) !goal) = 0 &&
@@ -61,7 +67,13 @@ let rec learn (available_height, available_size) (nt, desired_sig)
   									)
   								in
   								BatSet.add vsa acc 
-  							else acc  				 
+  							else
+									let _ =
+										(* if (available_height > 1) then                                              *)
+										(* 	prerr_endline (Printf.sprintf "learn_rule failure %s" (op_of_rule rule))  *)
+										add_learn_rule_cache false op  
+									in  
+									acc  				 
     					(* Rule: A -> B  *)
   						else if (is_nt_rule rule) then
     						let nt' = BatList.hd (get_nts rule) in  
@@ -221,6 +233,14 @@ and learn_for_each pts (available_height, available_size) (nt, desired_sig)
 		(* 	prerr_endline (Printf.sprintf "trying %s learned: %s" (Exprs.string_of_const (List.nth desired_sig i)) (string_of_vsa vsa)); *)
 		vsa
 	in
+	(* Here, folding is important. *)
+	(* For example, suppose we have two I/O examples (I1, O1), (I2, O2)   *)
+	(* which can be satisfied by an expression e. *)
+	(* Because the witness functions are incomplete, *)
+	(* it may be case that e can be learned from (I1, O1) but not from (I2, O2).*)
+	(* Suppose we do mapping. then we would fail to learn an expression for I2 *)
+	(* and conclude we can't learn an ite expression because not every I/O example has been covered. *)
+	(* By folding, we can learn e for I1 and mark I2 as covered. *)
 	let _, _, _, vsa_list = 
 		List.fold_left (fun (already_covered, available_height, available_size, vsa_list) i ->
 			if (BatSet.mem i already_covered) then 
@@ -571,6 +591,7 @@ and learn_paths available_height i rule nts desired_sig total_sigs nt_to_sigs nt
 let init () = 
 	let _ = learn_cache := BatMap.empty in
 	let _ = now_learning := BatSet.empty in
+	let _ = learn_rule_cache := BatMap.empty in 
 	(* let _ = curr_comp_size := !Options.init_comp_size in   *)
 	()
 			

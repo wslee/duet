@@ -16,7 +16,15 @@ To build Duet, you need
 - [Containers][] == 2.8.1 
 - [Z3][] == 4.8.1 
 
-## Install Sparrow with OPAM
+[OCaml]: http://caml.inria.fr
+[OPAM]: https://opam.ocaml.org
+[Batteries]: http://batteries.forge.ocamlcore.org
+[Ocamlgraph]: http://ocamlgraph.lri.fr/index.en.html
+[Core]: https://opensource.janestreet.com/core/
+[Containers]: https://github.com/c-cube/ocaml-containers.git
+[Z3]: https://github.com/Z3Prover/z3.git
+
+## Install Duet with OPAM
 The easiest way to install Duet is to use [OPAM][].
 Once you have cloned the code repository, do the followings:
 ```sh
@@ -31,17 +39,29 @@ $ opam install core batteries ocamlgraph
 
 Optionally, you may need to set up environment variables to use Z3. 
 ```sh
-$ export (DY)LD_LIBRARY_PATH=[OPAM home directory (e.g., ~/.opam]/[OCaml version you installed via OPAM]/lib/z3:$(DY)LD_LIBRARY_PATH  # add "DY" on a Mac
+$ export (DY)LD_LIBRARY_PATH=[OPAM home directory (e.g., ~/.opam)]/[your OCaml version (e.g., 4.08.0)]/lib/z3:$(DY)LD_LIBRARY_PATH  # add "DY" on a Mac
 ```
 
 After that, you can directly run ```make```.
 
 ## Run the synthesizer
+The following options are available. 
+* -lbu Learning-based unifier. Turn this option if you want to quickly find a conditional program from a small number of input-output examples. If it is turned off, a decision-tree learning-based algorithm will be used (default: false).
+* -fastdt Use a heuristic to compute entropies faster. This helps to find conditional programs more quickly but may result in larger solution programs (default: false). 
+* -ex_all Provide all the IO examples upfront. 
+* -get_size Get size of a program in the form of s-expression. 
+* -all Find all possible solutions and pick the smallest one. This may require more synthesis time, but useful for finding smaller solutions (default: false). 
+* -debug print info for debugging.
+* -max_size set the maximum size of candidates (default: 32). 
+* -max_height set the maximum height of candidates (default: 5). 
+* -init_comp_size set the initial size of components. The greater number for this option is given, the smaller solution you will get (default: 1). 
+* -help  Display this list of options
+
 ```sh
 # STRING 
 $ ./main.native -max_size 400 -lbu tests/string/phone-9-long-repeat.sl 
 # BITVEC
-$ ./main.native -max_size 10000 -fastdt -ex_all tests/bitvec/13_10.sl 
+$ ./main.native -max_size 10000 -fastdt -ex_all -init_comp_size 3 tests/bitvec/113_10.sl 
 # CIRCUIT
 $ ./main.native -max_size 128 -max_height 16 tests/circuit/CrCy_10-sbox2-D5-sIn102.sl
 ```

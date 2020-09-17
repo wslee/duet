@@ -4,14 +4,12 @@ let max_height = ref 0
 let init_comp_size = ref 1
 let find_all = ref false 
 let get_size = ref false 
-let theta = ref 0.9
 let ex_all = ref false 
 let fast_dt = ref false 
 let lbu = ref false 
 
 let options = 
 	[
-	 ("-theta", Arg.Float (fun x -> theta := x), "Set modulus");	
  	 ("-lbu", Arg.Set lbu, "Learning-based unifier");
 	 ("-fastdt", Arg.Set fast_dt, "Use a heuristic to compute entropies faster (may generate larger solutions)");
 	 ("-ex_all", Arg.Set ex_all, "Provide all the IO examples upfront");
