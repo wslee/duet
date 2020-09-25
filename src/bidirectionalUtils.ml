@@ -126,7 +126,6 @@ end
 let intset2bitset = BitSet.intset2bitset
 
 let int_max = Pervasives.max_int - 1000
-let curr_comp_size = ref !Options.init_comp_size  
 
 type vsa = Union of vsa BatSet.t 
 	| Join of rewrite * vsa list  

@@ -13,7 +13,8 @@ let main () =
     in
 		if !src = "" then Arg.usage options usage
     else
-			let (macro_instantiator, target_function_name, grammar, forall_var_map, spec) = 
+			let start = Sys.time () in
+			let (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) = 
 				Parse.parse !src 
 			in
 			(* prerr_endline (Specification.string_of_io_spec spec);  *)
@@ -22,7 +23,6 @@ let main () =
 			
 			(* PBE spec - input-output examples : ((const list) * const) list  *)
 			let spec_total = spec in
-			let start = Sys.time () in  
 			(* CEGIS loop *)
 			let rec cegis spec =
 				my_prerr_endline (Specification.string_of_io_spec spec);
@@ -58,12 +58,16 @@ let main () =
 				if !Options.ex_all then cegis spec_total 
 				else cegis [List.nth spec 0] 
 			in
-			my_prerr_endline ("****** solution *******");
 			(* prerr_endline (Exprs.string_of_expr sol); *)
-			prerr_endline (Exprs.sexpstr_of_fun target_function_name sol);
+			prerr_endline (Exprs.sexpstr_of_fun args_map target_function_name sol);
+			prerr_endline ("****************** statistics *******************");
 			prerr_endline ("size : " ^ (string_of_int (Exprs.size_of_expr sol)));
 			prerr_endline ("time : " ^ (Printf.sprintf "%.2f sec" (Sys.time() -. start)));
-			(* prerr_endline ("check dist time : " ^ (Printf.sprintf "%.2f sec" (!Witness.check_dist_time))); *)
+			prerr_endline ("max_component_size : " ^ (string_of_int !Bidirectional.curr_comp_size));
+			prerr_endline ("# components : " ^ (string_of_int !Bidirectional.num_components));
+			prerr_endline ("time for composition : " ^ (Printf.sprintf "%.2f sec" !Bidirectional.td_time));
+			prerr_endline ("time for component generation : " ^ (Printf.sprintf "%.2f sec" !Bidirectional.bu_time));
+			prerr_endline ("**************************************************");
 			()
 		 
 let _ = main ()

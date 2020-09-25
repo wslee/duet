@@ -19,7 +19,7 @@ type expr =
 let string_of_type ?(z3=false) ty = 
 	match ty with 
 	| Int -> "Int"
-	| BV -> if z3 then "(_ BitVec 64)" else "BitVec 64"
+	| BV -> if z3 then "(_ BitVec 64)" else "(BitVec 64)"
 	| String -> "String"
 	| Bool -> "Bool"
 
@@ -144,18 +144,36 @@ let get_concrete_bool expr =
 	| CBool (Concrete b) -> b 
 	| _ -> assert false 
 
-let sexpstr_of_fun name expr =
+let rec change_param_to_var param2var expr =
+	match expr with 
+	| Param _ -> (try BatMap.find expr param2var with _ -> assert false)
+	| Function (op, exprs, ty) -> Function (op, List.map (change_param_to_var param2var) exprs, ty)   
+	| _ -> expr  	
+
+let sexpstr_of_fun args_map name expr =
+	(* sorted: Param_1, Param_2, ... *)
 	let params = get_params expr 
 		|> BatSet.elements 
 		|> List.sort (fun x y -> String.compare (string_of_expr x) (string_of_expr y)) 
 	in  
+	(* Param _ -> Var _ *)
+	let param2var = 
+		BatMap.foldi (fun id param_expr acc ->
+			let ty = type_of_expr param_expr in 
+			BatMap.add param_expr (Var(id, ty)) acc  
+		) args_map BatMap.empty
+	in
+	let params =
+		List.map (fun param -> try BatMap.find param param2var with _ -> assert false) params 
+	in 
+	let expr = change_param_to_var param2var expr in 
 	let params_str =
 		(List.fold_left (fun acc param -> 
 			Printf.sprintf "%s (%s %s)" acc (string_of_expr param) (string_of_type (type_of_expr param))
 		 ) "" params) 
 	in 
 	let ret_type_str = (string_of_type (type_of_expr expr)) in 
-	Printf.sprintf "(define-fun %s (%s) (%s) %s)" 
+	Printf.sprintf "(define-fun %s %s %s %s)" 
 		name
 		params_str 
 		ret_type_str 

@@ -222,7 +222,7 @@ let process_synth_funcs synth_fun_data =
 	let args_map = get_args_map args_data in  
 	let ret_type = sexp_to_type ret_type_data in
 	let grammar = process_grammar args_map ret_type grammar_data in 
-	(name, grammar) 
+	(name, args_map, grammar) 
 	
 (* return: name -> Var expr *)
 let process_forall_vars forall_vars_data =
@@ -327,7 +327,7 @@ let parse file =
 		else if (BatList.length synth_funs_data) > 1 then 
 			failwith "Multi-function synthesis is not supported." 
 	in 
-	let target_function_name, grammar = 
+	let target_function_name, args_map, grammar = 
 		process_synth_funcs (BatList.hd synth_funs_data) 
 	in 
 	(* prerr_endline (Grammar.string_of_grammar grammar); *)
@@ -337,4 +337,4 @@ let parse file =
 	(* prerr_endline (string_of_list string_of_sexp (BatSet.choose constraints_data)); *)
 	let spec = process_constraints grammar target_function_name constraints_data macro_instantiator id2var in
 	my_prerr_endline (Specification.string_of_io_spec spec);
-	(macro_instantiator, target_function_name, grammar, !Specification.forall_var_map, spec)  
+	(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)  

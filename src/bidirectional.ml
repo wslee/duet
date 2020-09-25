@@ -4,10 +4,16 @@ open Vocab
 open Witness
 open BidirectionalUtils
 
+(** Global mutable variables *)
 (* (nt, sig, spec) -> vsa * height *)
 let learn_cache = ref BatMap.empty
 let goal = ref (Grammar.start_nt, [])
 let now_learning = ref BatSet.empty 
+let bu_time = ref 0.
+let td_time = ref 0.
+let curr_comp_size = ref !Options.init_comp_size
+let num_components = ref 0   
+
 
 let rec learn (available_height, available_size) (nt, desired_sig) 
 							(spec, nt_rule_list, total_sigs, nt_to_sigs, nt_sig_to_expr) =	
@@ -633,14 +639,14 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 	let rec iter max_component_size (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =
 		(* clean up caches *)
 		let _ = init () in
-		(* set current component size *)
-		let _ = curr_comp_size := max_component_size in 
 		let _ = 
 			if max_component_size > !Options.max_size then 
 				failwith (Printf.sprintf "No solution within size of %d. Consider increasing the max. size (use option \"-max_size\")" 
 										!Options.max_size) 
 		in 
-  	let prev_size_nt_sig_to_expr = BatMap.cardinal nt_sig_to_expr in 
+  	let prev_size_nt_sig_to_expr = BatMap.cardinal nt_sig_to_expr in
+		(** Component generation via Bottom-up enumeration *)
+		let start = Sys.time () in 
 		let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =
 			(* exclude ite's *)
 			(* when we add components, we don't have to add ite expressions as components; *)
@@ -649,7 +655,11 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
   		get_sigs_of_size desired_sig spec (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) 
 				nt_rule_list (max_component_size, max_component_size + 1) 
   	in 
-		my_prerr_endline (Printf.sprintf "max_component_size : %d - #components: %d" max_component_size (BatMap.cardinal nt_sig_to_expr));
+		let _ = bu_time := !bu_time +. (Sys.time() -. start) in
+		(* set current component size *)
+		let _ = curr_comp_size := max_component_size in
+		let _ = num_components := (BatMap.cardinal nt_sig_to_expr) in
+		my_prerr_endline (Printf.sprintf "max_component_size : %d - #components: %d" !curr_comp_size !num_components);
 		(* if no new component is added, or *)
 		(* current_comp_size does not reach the user-provided initial component size, *)
 		(* then continue generating components *)		
@@ -694,6 +704,8 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 					if (List.length desired_sig) = 1 then exclude_ite_rules nt_rule_list
 					else nt_rule_list 
   			in
+				(** Composition via Top-down propagation *)
+				let start = Sys.time () in
 				let vsa =
 					try  
 						learn (max_height, !Options.max_size) (Grammar.start_nt, desired_sig) 
@@ -701,6 +713,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 					with VSAFound vsas -> Union vsas
 					| exn -> failwith (Printexc.to_string exn) 
 				in
+				let _ = td_time := !td_time +. (Sys.time() -. start) in
       	my_prerr_endline ("VSA has been computed");
 				my_prerr_endline (string_of_vsa vsa);
 				(* prerr_endline (string_of_vsa vsa); *)
