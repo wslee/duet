@@ -137,7 +137,7 @@ let process_definitions defs_data =
 			if (!Options.get_size) then 
 			begin
 				let size = (Exprs.size_of_expr expr) in 
-				prerr_endline (Printf.sprintf "size: %d" size);
+				prerr_endline (Printf.sprintf "%d" size);
 				exit size
 			end
 		in

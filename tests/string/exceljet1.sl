@@ -33,4 +33,5 @@
 (constraint (= (f "ann chang" "achang_maaker.com") "maaker.com"))
 (constraint (= (f "bobby smith" "bobt_sphynx.uk.co") "sphynx.uk.co"))
 (constraint (= (f "art lennox" "art.lennox_svxn.com") "svxn.com"))
+(constraint (= (f "smith bagshaw" "smith_bbbbb.com") "bbbbb.com"))
 (check-synth)

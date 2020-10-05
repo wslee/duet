@@ -173,7 +173,7 @@ let sexpstr_of_fun args_map name expr =
 		 ) "" params) 
 	in 
 	let ret_type_str = (string_of_type (type_of_expr expr)) in 
-	Printf.sprintf "(define-fun %s %s %s %s)" 
+	Printf.sprintf "(define-fun %s (%s) %s %s)" 
 		name
 		params_str 
 		ret_type_str 
