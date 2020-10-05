@@ -30,11 +30,7 @@ Once you have cloned the code repository, do the followings:
 ```sh
 $ git clone https://github.com/wslee/duet
 $ cd duet
-$ opam switch create 4.08.0 
-$ eval `opam config env`
-$ opam install containers containers.2.8.1
-$ opam install z3 z3.4.8.1 
-$ opam install core batteries ocamlgraph 
+$ ./build
 ```
 
 Optionally, you may need to set up environment variables to use Z3. 
