@@ -7,7 +7,7 @@ then
 fi
 opam switch create $OCAML_VERSION
 eval `opam config env`
-opam install --yes containers.2.8.1 z3.4.8.1 core.v0.13.0 batteries.3.0.0 ocamlgraph.1.8.8 
+opam install --yes containers containers-data z3.4.8.1 core.v0.13.0 batteries.3.0.0 ocamlgraph.1.8.8 
 if [ "$(uname)" == "Darwin" ]; then
 	export DYLD_LIBRARY_PATH=~/.opam/${OCAML_VERSION}/lib/z3:$DYLD_LIBRARY_PATH
 else
