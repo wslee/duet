@@ -1,1 +1,1 @@
-true: package(z3), package(containers.data), package(containers), package(core_kernel), package(batteries), package(ocamlgraph)
+true: package(z3), package(containers-data), package(containers), package(core_kernel), package(batteries), package(ocamlgraph)
