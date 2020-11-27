@@ -27,6 +27,11 @@ type iospec = ((const list) * const) list
 
 type signature = const list  
 
+let get_param_id expr = 
+	match expr with 
+	| Param (i, _) -> i 
+	| _ -> failwith "get_param_id"
+
 let rec get_params expr = 
 	match expr with 
 	| Param _ -> BatSet.singleton expr 
@@ -151,11 +156,6 @@ let rec change_param_to_var param2var expr =
 	| _ -> expr  	
 
 let sexpstr_of_fun args_map name expr =
-	(* sorted: Param_1, Param_2, ... *)
-	let params = get_params expr 
-		|> BatSet.elements 
-		|> List.sort (fun x y -> String.compare (string_of_expr x) (string_of_expr y)) 
-	in  
 	(* Param _ -> Var _ *)
 	let param2var = 
 		BatMap.foldi (fun id param_expr acc ->
@@ -163,10 +163,12 @@ let sexpstr_of_fun args_map name expr =
 			BatMap.add param_expr (Var(id, ty)) acc  
 		) args_map BatMap.empty
 	in
-	let params =
-		List.map (fun param -> try BatMap.find param param2var with _ -> assert false) params 
-	in 
 	let expr = change_param_to_var param2var expr in 
+	let params = 
+		BatMap.foldi (fun id param_expr acc -> (id, param_expr) :: acc) args_map []
+		|> List.sort (fun (_, param_expr1) (_, param_expr2) -> (get_param_id param_expr1) - (get_param_id param_expr2)) 
+		|> List.map (fun (id, param_expr) -> Var(id, type_of_expr param_expr))
+	in
 	let params_str =
 		(List.fold_left (fun acc param -> 
 			Printf.sprintf "%s (%s %s)" acc (string_of_expr param) (string_of_type (type_of_expr param))
