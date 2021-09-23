@@ -322,15 +322,61 @@ let fun_apply_signature op values =
 	else if (String.compare op "bvashr") = 0 then
 		let num1s = List.map get_bv (List.nth values 0) in
 		let num2s = List.map get_bv (List.nth values 1) in
-		List.map2 (fun num1 num2 -> CBV (Int64.shift_right num1 (Int64.to_int num2))) num1s num2s
+		List.map2 (fun num1 num2 ->
+			let count = (Int64.unsigned_to_int num2) in
+			let count = if BatOption.is_none count then 65 else BatOption.get count in 
+			if count >= 64 then
+				if (Int64.compare num1 Int64.zero) = -1 then (CBV (-1L))
+				else (CBV 0L)
+			else 
+				CBV (Int64.shift_right num1 count)
+		) num1s num2s
 	else if (String.compare op "bvlshr") = 0 then
 		let num1s = List.map get_bv (List.nth values 0) in
 		let num2s = List.map get_bv (List.nth values 1) in
-		List.map2 (fun num1 num2 -> CBV (Int64.shift_right_logical num1 (Int64.to_int num2))) num1s num2s
+		List.map2 (fun num1 num2 ->
+			let count = (Int64.unsigned_to_int num2) in
+			let count = if BatOption.is_none count then 65 else BatOption.get count in 
+			if count >= 64 then (CBV 0L)
+			else CBV (Int64.shift_right_logical num1 count)
+		) num1s num2s
 	else if (String.compare op "bvshl") = 0 then
 		let num1s = List.map get_bv (List.nth values 0) in
 		let num2s = List.map get_bv (List.nth values 1) in
-		List.map2 (fun num1 num2 -> CBV (Int64.shift_left num1 (Int64.to_int num2))) num1s num2s
+		List.map2 (fun num1 num2 ->
+			let count = (Int64.unsigned_to_int num2) in
+			let count = if BatOption.is_none count then 65 else BatOption.get count in 
+			if count >= 64 then (CBV 0L)
+			else CBV (Int64.shift_left num1 count)
+		) num1s num2s
+	else if (String.compare op "bvule") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.unsigned_compare num1 num2 in
+			CBool (Concrete (compare = 0 || compare = -1))
+		) num1s num2s
+	else if (String.compare op "bvult") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.unsigned_compare num1 num2 in
+			CBool (Concrete (compare = -1))
+		) num1s num2s
+		else if (String.compare op "bvsle") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.compare num1 num2 in
+			CBool (Concrete (compare = 0 || compare = -1))
+		) num1s num2s
+	else if (String.compare op "bvslt") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.compare num1 num2 in
+			CBool (Concrete (compare = -1))
+		) num1s num2s
 	(** LIA theory **)
 	else if (String.compare op "+") = 0 then
 		let num1s = List.map get_int (List.nth values 0) in
@@ -384,8 +430,7 @@ let compute_signature spec expr =
 	in
 	try
 		evaluate_expr param_valuation expr
-	with _ ->
-		raise UndefinedSemantics
+	with _ -> raise UndefinedSemantics
 	
 let compute_signature_wo_exception spec expr = 	
 	let param_valuation =  
