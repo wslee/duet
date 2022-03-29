@@ -148,9 +148,11 @@ let get_sigs_of_size desired_sig spec (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)
   			let holes = get_holes [] rule in 
   			if (List.length holes) = 0 then
   				let expr = (expr_of_rewrite rule) in 
+					let _ = my_prerr_endline (Printf.sprintf "Generated: %s" (Exprs.string_of_expr expr)) in
   				let signature = compute_signature spec expr in
-  				if (compare desired_sig signature) = 0 then raise (SolutionFound expr)
-  				else 
+  				(* if (compare desired_sig signature) = 0 then  *)
+					(* 	raise (SolutionFound expr)                 *)
+  				(* else                                         *)
   					(add_signature nt signature nt_to_sigs, 
   					 add_expr nt (expr, 1) nt_to_exprs,
   					 BatMap.add (nt, signature) expr nt_sig_to_expr) 
