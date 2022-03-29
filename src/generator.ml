@@ -137,9 +137,10 @@ let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec targ
 			try
 				let signature = compute_signature spec expr in
 				let expr_sigs = (BatMap.find nt !nt_to_sigs_ref) in
-				if (compare desired_sig signature) = 0 then
-					raise (SolutionFound expr) 
-				else if not (BatSet.mem signature expr_sigs) then
+				(* if (compare desired_sig signature) = 0 then *)
+				(* 	raise (SolutionFound expr)                *)
+				(* else                                        *)
+				if not (BatSet.mem signature expr_sigs) then
 					(* let _ = my_prerr_endline (Printf.sprintf "Generated: %s %s" (Exprs.string_of_expr expr) (string_of_signature signature)) in *)
 					(* New candidiate found. Update *)
 					let _ = nt_to_sigs_ref := add_signature nt signature !nt_to_sigs_ref in 
@@ -159,56 +160,56 @@ let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec targ
 
 (* grammar: (rewrite, rewrite BatSet.t) BatMap.t *)
 (* spec: ((const list) * const) list *)	
-let enum_bu_search grammar spec = 
-	let nts = BatMap.foldi (fun nt rules s -> BatSet.add nt s) grammar BatSet.empty in 
-	let nt_to_sigs : (rewrite, signature BatSet.t) BatMap.t = 
-		BatSet.fold (fun nt m -> BatMap.add nt BatSet.empty m) nts BatMap.empty 
-	in 
-	let nt_to_exprs : (rewrite, (expr * int) BatSet.t) BatMap.t = 
-		BatSet.fold (fun nt m -> BatMap.add nt BatSet.empty m) nts BatMap.empty 
-	in
-	let nt_sig_to_expr : (rewrite * signature, expr) BatMap.t = BatMap.empty in
-	let desired_sig = List.map (fun (inputs, output) -> output) spec in
-	let nt_rule_list = get_nt_rule_list grammar in
-	(* process candidates of size 1 *)
-	try    
-  	let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) = 
-  		List.fold_left (fun (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) (nt, rule) ->
-  			let holes = get_holes [] rule in 
-  			if (List.length holes) = 0 then
-  				let expr = (expr_of_rewrite rule) in 
-  				let signature = compute_signature spec expr in
-					if (compare desired_sig signature) = 0 then raise (SolutionFound expr)
-  				else (add_signature nt signature nt_to_sigs, add_expr nt (expr, 1) nt_to_exprs,
-								BatMap.add (nt, signature) expr nt_sig_to_expr) 
-  			else (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) 
-  		) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) nt_rule_list 
-  	in 
-  	let rec iter size (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =
-			(if (size > !Options.max_size) then failwith (Printf.sprintf "No solution of size < %d !" !Options.max_size));
-  		(* my_prerr_endline (Printf.sprintf "-- Size : %d --" size);                                                                                                           *)
-			(* my_prerr_endline ("-- # Components: --");                                                                                                                           *)
-			(* BatSet.iter (fun nt ->                                                                                                                                              *)
-			(* 	my_prerr_endline (Printf.sprintf "%s : %d" (string_of_rewrite nt) (BatSet.cardinal (BatMap.find nt nt_to_exprs)));                                                *)
-			(* 	List.iter (fun sz ->                                                                                                                                              *)
-			(* 		let components = (get_components nt nt_to_exprs sz) in                                                                                                          *)
-			(* 		if (List.length components) > 0 then                                                                                                                            *)
-			(* 			my_prerr_endline (string_of_list string_of_expr components)                                                                                                   *)
-			(* 	) (BatList.range 1 `To size);                                                                                                                                     *)
-			(* 	my_prerr_endline (string_of_map string_of_rewrite (fun sigs -> string_of_set string_of_signature sigs) nt_to_sigs);                                               *)
-			(* ) nts;                                                                                                                                                              *)
-			(* my_prerr_endline (Printf.sprintf "************ nt -> exprs ************");                                                                                          *)
-  		(* BatMap.iter (fun nt exprs ->                                                                                                                                        *)
-  		(* 	prerr_endline (Printf.sprintf "%s -> %s" (Grammar.string_of_rewrite nt) (string_of_set (fun (e,i) -> Printf.sprintf "%s (%d)" (Exprs.string_of_expr e) i) exprs)) *)
-  		(* ) nt_to_exprs;                                                                                                                                                      *)
-  		let nt_sig_to_expr' = nt_sig_to_expr in 
-			let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) = 
-				List.fold_left (fun (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) (nt, rule) ->
-					grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec size
-				) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) nt_rule_list 
-  		in 
-			iter (size + 1) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)   
-  	in
-		iter 2 (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)
-	with SolutionFound sol -> sol  
+(* let enum_bu_search grammar spec =                                                                                                                                               *)
+(* 	let nts = BatMap.foldi (fun nt rules s -> BatSet.add nt s) grammar BatSet.empty in                                                                                            *)
+(* 	let nt_to_sigs : (rewrite, signature BatSet.t) BatMap.t =                                                                                                                     *)
+(* 		BatSet.fold (fun nt m -> BatMap.add nt BatSet.empty m) nts BatMap.empty                                                                                                     *)
+(* 	in                                                                                                                                                                            *)
+(* 	let nt_to_exprs : (rewrite, (expr * int) BatSet.t) BatMap.t =                                                                                                                 *)
+(* 		BatSet.fold (fun nt m -> BatMap.add nt BatSet.empty m) nts BatMap.empty                                                                                                     *)
+(* 	in                                                                                                                                                                            *)
+(* 	let nt_sig_to_expr : (rewrite * signature, expr) BatMap.t = BatMap.empty in                                                                                                   *)
+(* 	let desired_sig = List.map (fun (inputs, output) -> output) spec in                                                                                                           *)
+(* 	let nt_rule_list = get_nt_rule_list grammar in                                                                                                                                *)
+(* 	(* process candidates of size 1 *)                                                                                                                                            *)
+(* 	try                                                                                                                                                                           *)
+(*   	let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =                                                                                                                             *)
+(*   		List.fold_left (fun (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) (nt, rule) ->                                                                                               *)
+(*   			let holes = get_holes [] rule in                                                                                                                                        *)
+(*   			if (List.length holes) = 0 then                                                                                                                                         *)
+(*   				let expr = (expr_of_rewrite rule) in                                                                                                                                  *)
+(*   				let signature = compute_signature spec expr in                                                                                                                        *)
+(* 					if (compare desired_sig signature) = 0 then raise (SolutionFound expr)                                                                                                *)
+(*   				else (add_signature nt signature nt_to_sigs, add_expr nt (expr, 1) nt_to_exprs,                                                                                       *)
+(* 								BatMap.add (nt, signature) expr nt_sig_to_expr)                                                                                                                 *)
+(*   			else (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)                                                                                                                          *)
+(*   		) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) nt_rule_list                                                                                                                  *)
+(*   	in                                                                                                                                                                          *)
+(*   	let rec iter size (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =                                                                                                               *)
+(* 			(if (size > !Options.max_size) then failwith (Printf.sprintf "No solution of size < %d !" !Options.max_size));                                                            *)
+(*   		(* my_prerr_endline (Printf.sprintf "-- Size : %d --" size);                                                                                                           *) *)
+(* 			(* my_prerr_endline ("-- # Components: --");                                                                                                                           *) *)
+(* 			(* BatSet.iter (fun nt ->                                                                                                                                              *) *)
+(* 			(* 	my_prerr_endline (Printf.sprintf "%s : %d" (string_of_rewrite nt) (BatSet.cardinal (BatMap.find nt nt_to_exprs)));                                                *) *)
+(* 			(* 	List.iter (fun sz ->                                                                                                                                              *) *)
+(* 			(* 		let components = (get_components nt nt_to_exprs sz) in                                                                                                          *) *)
+(* 			(* 		if (List.length components) > 0 then                                                                                                                            *) *)
+(* 			(* 			my_prerr_endline (string_of_list string_of_expr components)                                                                                                   *) *)
+(* 			(* 	) (BatList.range 1 `To size);                                                                                                                                     *) *)
+(* 			(* 	my_prerr_endline (string_of_map string_of_rewrite (fun sigs -> string_of_set string_of_signature sigs) nt_to_sigs);                                               *) *)
+(* 			(* ) nts;                                                                                                                                                              *) *)
+(* 			(* my_prerr_endline (Printf.sprintf "************ nt -> exprs ************");                                                                                          *) *)
+(*   		(* BatMap.iter (fun nt exprs ->                                                                                                                                        *) *)
+(*   		(* 	prerr_endline (Printf.sprintf "%s -> %s" (Grammar.string_of_rewrite nt) (string_of_set (fun (e,i) -> Printf.sprintf "%s (%d)" (Exprs.string_of_expr e) i) exprs)) *) *)
+(*   		(* ) nt_to_exprs;                                                                                                                                                      *) *)
+(*   		let nt_sig_to_expr' = nt_sig_to_expr in                                                                                                                                   *)
+(* 			let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =                                                                                                                           *)
+(* 				List.fold_left (fun (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) (nt, rule) ->                                                                                             *)
+(* 					grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec size                                                                                          *)
+(* 				) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) nt_rule_list                                                                                                                *)
+(*   		in                                                                                                                                                                        *)
+(* 			iter (size + 1) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)                                                                                                                 *)
+(*   	in                                                                                                                                                                          *)
+(* 		iter 2 (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)                                                                                                                            *)
+(* 	with SolutionFound sol -> sol                                                                                                                                                 *)
 	
