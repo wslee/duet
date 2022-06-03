@@ -75,6 +75,12 @@ let ret_type_of_op rule =
 	else if (String.compare op "bvashr") = 0 then BV
 	else if (String.compare op "bvlshr") = 0 then BV
 	else if (String.compare op "bvshl") = 0 then BV
+	else if (String.compare op "bvugt") = 0 then BV
+	else if (String.compare op "bvult") = 0 then BV
+	else if (String.compare op "bvule") = 0 then BV
+	else if (String.compare op "bvsgt") = 0 then BV
+	else if (String.compare op "bvslt") = 0 then BV
+	else if (String.compare op "bvsle") = 0 then BV
 	(** LIA theory **)
 	else if (String.compare op "+") = 0 then Int  
 	else if (String.compare op "-") = 0 then Int

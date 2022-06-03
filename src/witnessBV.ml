@@ -211,7 +211,7 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
   			BatSet.filter (fun arg1_sig ->
   				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
   					let arg0_v = get_bv arg0_const in
-  					let arg1_v = get_bv arg0_const in
+  					let arg1_v = get_bv arg1_const in
   					let output_v = get_bv output_const in
   					(not (Int64.equal arg1_v Int64.zero)) && 
   					(Int64.equal (Int64.div arg0_v arg1_v) output_v)
@@ -263,7 +263,7 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
 			BatSet.filter (fun arg1_sig ->
 				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
 					let arg0_v = get_bv arg0_const in
-					let arg1_v = get_bv arg0_const in
+					let arg1_v = get_bv arg1_const in
 					let output_v = get_bv output_const in
 					(not (Int64.equal Int64.zero arg1_v)) && 
 					(Int64.equal (Int64.unsigned_div arg0_v arg1_v) output_v)
@@ -657,5 +657,23 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
   					failwith (Printf.sprintf "bvshl %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in
   				acc @ [CBV (arg1_v)]
   			) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton
-	else 
+	else if List.mem op ["bvule"; "bvult"; "bvugt"; "bvsle"; "bvslt"; "bvsgt"] then
+		let _ = assert ((type_of_signature output_sig) = Bool) in   
+		if (BatList.length arg_sigs) = 0 then nt_sigs
+		else 
+			let arg0_sig = List.nth arg_sigs 0 in
+			BatSet.filter (fun arg1_sig ->
+				BatList.for_all2 (fun (arg0_const, arg1_const) output_const ->
+					let desired_output_v = get_concrete_bool output_const in
+					let output_v = 
+						try  
+							(fun_apply_signature op [[arg0_const]; [arg1_const]]) 
+							|> List.hd 
+							|> get_concrete_bool 
+						with _ -> assert false 
+					in 
+					(Pervasives.compare output_v desired_output_v) = 0
+				) (BatList.combine arg0_sig arg1_sig) output_sig
+			) nt_sigs
+	else	
 		failwith (Printf.sprintf "unsupported op: %s" op)

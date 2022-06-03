@@ -363,7 +363,14 @@ let fun_apply_signature op values =
 			let compare = Int64.unsigned_compare num1 num2 in
 			CBool (Concrete (compare = -1))
 		) num1s num2s
-		else if (String.compare op "bvsle") = 0 then
+	else if (String.compare op "bvugt") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.unsigned_compare num1 num2 in
+			CBool (Concrete (compare = 1))
+		) num1s num2s
+	else if (String.compare op "bvsle") = 0 then
 		let num1s = List.map get_bv (List.nth values 0) in
 		let num2s = List.map get_bv (List.nth values 1) in
 		List.map2 (fun num1 num2 ->
@@ -376,6 +383,13 @@ let fun_apply_signature op values =
 		List.map2 (fun num1 num2 ->
 			let compare = Int64.compare num1 num2 in
 			CBool (Concrete (compare = -1))
+		) num1s num2s
+	else if (String.compare op "bvsgt") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.compare num1 num2 in
+			CBool (Concrete (compare = 1))
 		) num1s num2s
 	(** LIA theory **)
 	else if (String.compare op "+") = 0 then
