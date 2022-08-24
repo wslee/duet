@@ -96,7 +96,7 @@ let verify sol spec =
 			(match m with
 			| None -> assert false
 			| Some m -> 
-				(* let _ = prerr_endline (Z3.Model.to_string m) in  *)
+				(* let _ = prerr_endline (Z3.Model.to_string m) in *)
 				let decls = (Z3.Model.get_decls m) in
 				let cex_input : Exprs.const list = 
 					let m = 
@@ -121,7 +121,7 @@ let verify sol spec =
 							(fun i -> Exprs.string_of_expr (Exprs.Param (i, Bool))) 
 							(BatList.range 0 `To ((BatMap.cardinal m) - 1))
 					in   
-					List.map (fun x -> try BatMap.find x m with _ -> assert false) param_ids 
+					List.map (fun x -> try BatMap.find x m with _ -> failwith x) param_ids 
 				in
 				let sol_output = 
 					Exprs.compute_signature [(cex_input, CInt 0)] sol
@@ -137,6 +137,68 @@ let verify sol spec =
 				Some (cex_input, cex_output)
 			)
 		 
+(* Using Z3 CLI *)
+let verify_cli sol spec =
+	(* no oracle - pbe *)
+	if (Pervasives.compare !oracle_expr (Const (CInt 0))) = 0 then None
+	else
+		let params = Exprs.get_params !oracle_expr_resolved in
+		let params_str =
+  		(BatSet.fold (fun param acc ->
+  			Printf.sprintf "%s\n(declare-const %s %s)"
+					acc
+  				(string_of_expr param)
+  				(string_of_type ~z3:true (type_of_expr param))
+  		 ) params "")
+  	in
+		let str =
+			Printf.sprintf "%s\n(assert (not (= %s %s)))"
+				params_str
+				(Exprs.string_of_expr !oracle_expr_resolved)
+				(Exprs.string_of_expr sol)
+		in
+		let str = str ^ "\n(check-sat)\n(get-model)\n" in
+		my_prerr_endline str;
+		let q = Z3interface.solve str in
+    match q with
+    | None -> None
+    | Some m ->
+			let cex_input : Exprs.const list =
+				let param_ids =
+					List.map
+						(fun i -> Exprs.string_of_expr (Exprs.Param (i, Bool)))
+						(BatList.range 0 `To ((BatMap.cardinal m) - 1))
+				in
+				List.map (fun x -> try BatMap.find x m with _ -> assert false) param_ids
+			in
+			let sol_output =
+				try
+					Some (
+						(* CInt 0 : placeholder *)
+						Exprs.compute_signature [(cex_input, CInt 0)] sol
+						|> List.hd
+					)
+				with UndefinedSemantics -> None
+			in
+			let cex_output =
+				try
+					Exprs.compute_signature [(cex_input, CInt 0)] !oracle_expr_resolved
+					|> List.hd
+				with UndefinedSemantics -> failwith "Z3 returns an invalid counter example!"
+			in
+			my_prerr_endline
+				(Printf.sprintf "sol:%s\n"
+					(if BatOption.is_none sol_output then "N/A"
+					 else (string_of_const (BatOption.get sol_output)))
+				);
+			my_prerr_endline (Printf.sprintf "oracle:%s\n" (string_of_const cex_output));
+			my_prerr_endline (Printf.sprintf "cex : %s" (string_of_io_spec [(cex_input, cex_output)]));
+			let _ =
+				if BatOption.is_some sol_output then
+					assert ((Pervasives.compare (BatOption.get sol_output) cex_output) <> 0)
+			in
+			Some (cex_input, cex_output)
+		
 let add_trivial_examples grammar spec =
 	let _ = assert (Exprs.is_function_expr !oracle_expr) in
 	let _ = assert (Exprs.is_function_expr !oracle_expr_resolved) in 
@@ -146,8 +208,18 @@ let add_trivial_examples grammar spec =
 		(* 	(Grammar.NTNode.equal Grammar.start_nt nt) && (Grammar.is_param_rule r) *)
 		(* ) (Grammar.get_nt_rule_list grammar) |> snd |> Grammar.expr_of_rewrite    *)
 	in
-	match (verify trivial_sol spec) with 
-	| None -> raise (Generator.SolutionFound trivial_sol)  
+	match ((if !Options.z3_cli then verify_cli else verify) trivial_sol spec) with 
+	| None -> 
+		let trivial_sol = Exprs.Const (Exprs.get_trivial_value2 (Grammar.type_of_nt Grammar.start_nt)) in
+		begin
+  		match ((if !Options.z3_cli then verify_cli else verify) trivial_sol spec) with
+  		| None -> assert false
+  		| Some cex -> 
+  			let _ = assert (not (List.mem cex spec)) in  
+  			(cex :: spec)
+		end   
+		(* let _ = prerr_endline (Exprs.string_of_expr trivial_sol) in  *)
+		(* raise (Generator.SolutionFound trivial_sol)   *)
 	| Some cex -> 
 		let _ = assert (not (List.mem cex spec)) in  
 		(cex :: spec)

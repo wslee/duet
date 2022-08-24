@@ -657,7 +657,7 @@ let witness available_height nt_sigs (int_sigs, bv_sigs, string_sigs, bool_sigs)
   					failwith (Printf.sprintf "bvshl %s %s %s %s %s" (Int64.to_string arg1_v) (int64_to_string_in_binary arg0_v) (int64_to_string_in_binary output_v) (Int64.to_string arg0_v) (Int64.to_string output_v)) in
   				acc @ [CBV (arg1_v)]
   			) [] (BatList.combine arg0_sig output_sig) |> BatSet.singleton
-	else if List.mem op ["bvule"; "bvult"; "bvugt"; "bvsle"; "bvslt"; "bvsgt"] then
+	else if List.mem op ["bvule"; "bvult"; "bvugt"; "bvsle"; "bvslt"; "bvsgt"; "bvsge"] then
 		let _ = assert ((type_of_signature output_sig) = Bool) in   
 		if (BatList.length arg_sigs) = 0 then nt_sigs
 		else 

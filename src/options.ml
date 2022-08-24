@@ -7,6 +7,7 @@ let get_size = ref false
 let ex_all = ref false 
 let fast_dt = ref false 
 let lbu = ref false 
+let z3_cli = ref false
 
 let options = 
 	[
@@ -18,5 +19,6 @@ let options =
 	 ("-debug", Arg.Set debug, "print info for debugging");
 	 ("-max_size", Arg.Int (fun x -> max_size := x), "set the maximum size of candidates");
 	 ("-max_height", Arg.Int (fun x -> max_height := x), "set the maximum height of candidates");
-	 ("-init_comp_size", Arg.Int (fun x -> init_comp_size := x), "set the initial size of components")
+	 ("-init_comp_size", Arg.Int (fun x -> init_comp_size := x), "set the initial size of components");
+	 ("-z3cli", Arg.Set z3_cli, "Use Z3 via command line interface");
   ]

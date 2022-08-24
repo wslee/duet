@@ -79,6 +79,7 @@ let ret_type_of_op rule =
 	else if (String.compare op "bvult") = 0 then BV
 	else if (String.compare op "bvule") = 0 then BV
 	else if (String.compare op "bvsgt") = 0 then BV
+	else if (String.compare op "bvsge") = 0 then BV
 	else if (String.compare op "bvslt") = 0 then BV
 	else if (String.compare op "bvsle") = 0 then BV
 	(** LIA theory **)
@@ -269,7 +270,114 @@ let string_of_grammar grammar =
 			(string_of_rewriteset rules)
 			acc  
 	) grammar ""
-				
+
+(* resolve macro definitions and "normalize" the grammar, 
+ i.e., every rule begins with a standard SMT operator and the arity   
+ e.g., 
+ (define-fun mybvadd ((x (BitVec 64)) (y (BitVec 64))) (BitVec 64) (bvadd x y)) 
+ (synth-fun f ( (x (BitVec 64)) ) (BitVec 64)
+	((Start (BitVec 64)
+	x
+	(mybvadd (mybvadd x Start) Start)
+	... 
+	
+	will be transformed into 
+	
+	((Start (BitVec 64)
+	x
+	(bvadd NT1 Start)
+	...
+	(NT1 (BitVec 64) (bvadd x Start))
+	
+	TODO: macro resolution	 
+*) 
+
+
+let nt_id = ref 0 
+let create_new_nt () =
+	incr nt_id; 
+	NTRewrite (Printf.sprintf "_NT_%d" !nt_id)  
+	
+let rec normalize grammar =
+	let non_standard_rules =
+		BatMap.foldi (fun nt rules result ->
+			BatSet.fold (fun rule result ->
+				match rule with
+				| FuncRewrite (op, children) -> 
+					(* if any child is not of funcrewrite, add a rule *)
+					if (List.exists (fun child -> not (is_nt_rule child)) children) then 
+						BatSet.add (nt, rule) result
+					else result   
+				| ExprRewrite expr ->
+					(* if it is a function expression, change it into a funcrewrite *)
+					if (Exprs.is_function_expr expr) then
+						BatSet.add (nt, rule) result
+					else result  
+				| _ -> result 
+			) rules result
+		) grammar BatSet.empty  
+	in   
+	if BatSet.is_empty non_standard_rules then grammar 
+	else 
+		let grammar =
+			BatSet.fold (fun (nt, rule) result ->
+				(* remove non-standard rules *) 
+				let result =
+					let rules = try BatMap.find nt result with _ -> BatSet.empty in 
+					BatMap.add nt (BatSet.remove rule rules) result 
+				in
+				(* current rules *)
+				let rules = try BatMap.find nt result with _ -> BatSet.empty in 
+				(* do one-step normalization *)
+				let (rule', rules_tobe_added)  =
+					match rule with 
+					| FuncRewrite (op, children) ->
+						let children' = 
+							List.map (fun child -> 
+								if not (is_nt_rule child) then
+									let nt' = create_new_nt () in 
+									(nt', child)   
+								else (child, child)
+							) children
+						in  
+						let rule' = FuncRewrite (op, List.map fst children') in 
+						let new_rules = 
+							List.filter (fun (a,b) -> (compare_rewrite a b) <> 0) children' 
+						in 
+						(rule', new_rules)
+					| ExprRewrite expr ->
+						let _ = assert (Exprs.is_function_expr expr) in
+						begin 
+						match expr with 
+						| Function (op, children, ty) -> 
+							let children' = 
+  							List.map (fun child -> 
+									let nt' = create_new_nt () in 
+									(nt', ExprRewrite child)   
+  							) children
+  						in  
+  						let rule' = FuncRewrite (op, List.map fst children') in 
+  						let new_rules = children' in 
+  						(rule', new_rules)
+						| _ -> assert false  
+						end
+					| _ -> assert false 	  
+				in
+				(* add the transformed rule *) 			 	  
+				let result = (BatMap.add nt (BatSet.add rule' rules) result) in
+				(* add new rules to be added generated during normalization *) 
+				List.fold_left (fun result (nt, body) ->
+					let nt_rules = try BatMap.find nt result with _ -> BatSet.empty in
+					BatMap.add nt (BatSet.add body nt_rules) result  
+				) result rules_tobe_added 
+			) non_standard_rules grammar  
+		in  
+		normalize grammar 
+		
+	
+let preprocess macro_instantiator grammar =
+	normalize grammar		
+	
 (* let init_grammar =                                                                 *)
 (* 	let string_nt_id = "String" in                                                   *)
 (*   let string_nt = (NTRewrite string_nt_id) in                                      *)

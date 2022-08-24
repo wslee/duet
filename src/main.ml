@@ -17,10 +17,7 @@ let main () =
 			let (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) = 
 				Parse.parse !src 
 			in
-			(* prerr_endline (Specification.string_of_io_spec spec);  *)
-			(* let sol = Afta.synthesis (macro_instantiator, target_function_name, grammar, forall_var_map, spec) in *)
-			(* let sol = Generator.enum_bu_search grammar spec in *)
-			
+			let grammar = Grammar.preprocess macro_instantiator grammar in 
 			(* PBE spec - input-output examples : ((const list) * const) list  *)
 			let spec_total = spec in
 			(* CEGIS loop *)
@@ -45,7 +42,7 @@ let main () =
 				in
 				(* no mismatched input-output examples *)
 				if (List.length spec) = (List.length spec') then 
-					match (Specification.verify sol spec) with 
+					match (if !Options.z3_cli then Specification.verify_cli else Specification.verify) sol spec with 
 					| None -> sol 
 					| Some cex ->
 						my_prerr_endline (Specification.string_of_io_spec [cex]); 

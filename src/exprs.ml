@@ -46,6 +46,13 @@ let get_trivial_value ty =
 	| String -> CString "" 
 	| Bool -> CBool (Concrete true) 
 
+let get_trivial_value2 ty = 
+	match ty with 
+	| Int -> CInt 1  
+	| BV -> CBV (Int64.one) 
+	| String -> CString "a" 
+	| Bool -> CBool (Concrete false) 
+
 let is_function_expr expr = 
 	match expr with 
 	| Function _ -> true 
@@ -391,6 +398,13 @@ let fun_apply_signature op values =
 			let compare = Int64.compare num1 num2 in
 			CBool (Concrete (compare = 1))
 		) num1s num2s
+	else if (String.compare op "bvsge") = 0 then
+		let num1s = List.map get_bv (List.nth values 0) in
+		let num2s = List.map get_bv (List.nth values 1) in
+		List.map2 (fun num1 num2 ->
+			let compare = Int64.compare num1 num2 in
+			CBool (Concrete (compare = 0 || compare = 1))
+		) num1s num2s	
 	(** LIA theory **)
 	else if (String.compare op "+") = 0 then
 		let num1s = List.map get_int (List.nth values 0) in

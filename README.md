@@ -42,6 +42,7 @@ After that, you can directly run ```make```.
 
 ## Run the synthesizer
 The following options are available. 
+* -z3cli Use Z3 via command line interface (make sure the path to z3 is in $PATH). This option is available because sometimes Z3 through OCaml API undesirably behaves. 
 * -lbu Learning-based unifier. Turn this option if you want to quickly find a conditional program from a small number of input-output examples. If it is turned off, a decision-tree learning-based algorithm will be used (default: false).
 * -fastdt Use a heuristic to compute entropies faster. This helps to find conditional programs more quickly but may result in larger solution programs (default: false). 
 * -ex_all Provide all the IO examples upfront. 
@@ -50,7 +51,7 @@ The following options are available.
 * -debug print info for debugging.
 * -max_size set the maximum size of candidates (default: 32). 
 * -max_height set the maximum height of candidates (default: 5). 
-* -init_comp_size set the initial size of components. The greater number for this option is given, the smaller solution you will get (default: 1). 
+* -init_comp_size set the initial size of components. The greater number for this option is given, the smaller solution you will get (default: 1).
 * -help  Display this list of options
 
 ```sh
