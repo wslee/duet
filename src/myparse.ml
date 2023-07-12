@@ -36,17 +36,22 @@ let sexp_to_type sexp =
 		else failwith ("Unknown type: " ^ s) 
 ;;
 
-let filter_sexps_for tag sexps =
-	match sexps with
-	| Sexp.Atom _ 
-	-> failwith "filter_sexps_for: sexps must be a list of lists"
-	| Sexp.List sexps' -> (
-		BatList.filter (fun sexp -> 
-			match sexp with
-			| Sexp.List ((Sexp.Atom tag') :: _) -> tag = tag'
-			| _ -> false
-		) sexps'
-	)
+let filter_sexps_for tag sexps = 
+	BatList.fold_left (fun acc sexp ->
+		match sexp with 
+		| Sexp.List sexps' -> 
+			if (BatList.length sexps') > 0 && 
+				 (String.compare (Sexp.to_string (BatList.hd sexps')) tag) = 0 then 
+				 (* BatSet.add (BatList.remove_at 0 sexps')  acc *)
+				if (BatList.length (BatList.tl sexps')) == 1 then	
+					(BatList.hd (BatList.tl sexps')) :: acc
+				else if (BatList.length (BatList.tl sexps')) > 1 then
+					(Sexp.List (BatList.tl sexps')) :: acc
+				else
+					acc
+			else acc 
+		| _ -> acc  
+	) [] (*BatSet.empty*) sexps
 ;;
 
 let parse_target_function_arguments sexps =
@@ -175,13 +180,14 @@ let parse_synth_fun_sexps sexps =
 	if (BatList.length synth_fun_data) <> 1 then
 		failwith "parse_synth_fun_sexps: synth-fun must be defined exactly once"
 	else
-		let _ = my_prerr_endline (string_of_sexp (BatList.hd synth_fun_data)) in
 		let synth_fun_data = (BatList.hd synth_fun_data) in
 		match synth_fun_data with
-		| Sexp.List [Sexp.Atom name; arguments; Sexp.Atom return_type; Sexp.List grammar] ->
+		| Sexp.List [Sexp.Atom name; arguments; return_type; Sexp.List grammar] ->
 			let target_function_name = name in
+			let return_type = sexp_to_type return_type in
 			let args_map = parse_target_function_arguments arguments in
 			let grammar = parse_grammar grammar args_map in
+			let _ = op_type_map := BatMap.add target_function_name return_type !op_type_map in
 			(target_function_name, args_map, grammar)
 		| _ -> failwith "parse_synth_fun_sexps: synth-fun must be defined as (synth-fun name (params) return-type (grammar))"
 ;;
@@ -296,7 +302,7 @@ let parse file =
 		) lines 
 	in  
 	let _ = write_lines lines file' in  
-	let sexps = Sexp.List (Sexp.load_sexps file') in
+	let sexps = Sexp.load_sexps file' in
 	let _ = Unix.unlink file' in
 	let target_function_name, args_map, grammar = parse_synth_fun_sexps sexps in
 	let id2var = parse_declare_var_sexps sexps in
