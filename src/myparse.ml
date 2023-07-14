@@ -87,7 +87,7 @@ let rec sexp_to_rule sexp nts args_map =
 				| [] -> acc
 				| child :: children' ->
 					let child_rule = sexp_to_rule child nts args_map in
-					sexp_to_rule' children' (child_rule :: acc)
+					sexp_to_rule' children' (acc @ [child_rule])
 				in
 				let children = sexp_to_rule' children [] in
 				FuncRewrite (operator, children)
@@ -123,7 +123,8 @@ let rec function_body_to_expr args_map body_sexp  =
 				if BatMap.mem operator !op_type_map then
 					BatMap.find operator !op_type_map
 				else
-					failwith ("function_body_to_expr: unknown operator " ^ operator)
+					(* failwith ("function_body_to_expr: unknown operator " ^ operator) *)
+					ret_type_of_op (FuncRewrite (operator, []))
 			)
 			in
 			Function (operator, children, return_type)
@@ -212,6 +213,7 @@ let parse_define_fun_sexps sexps =
 			let args_map = parse_target_function_arguments arguments in
 			let return_type = sexp_to_type return_type in
 			let body = function_body_to_expr args_map body in
+			let _ = op_type_map := BatMap.add name return_type !op_type_map in
 			BatMap.add name body acc
 		| _ -> failwith "parse_define_fun_sexps: define-fun must be defined as (define-fun name (params) return-type body)"
 	) in
@@ -237,6 +239,7 @@ let parse_constraints_sexps sexps grammar target_function_name macro_instantiato
 							(get_children lhs, expr2const rhs)
 					) in
 					let inputs = BatList.map expr2const inputs in
+					(* let _ = my_prerr_endline ("constraint: " ^ (Exprs.string_of_const output)) in *)
 					Specification.add_io_spec (inputs, output) spec
 				(* (= (f const_0) (g const_0)) *)
 				else if (Exprs.is_function_expr lhs) && (Exprs.is_function_expr rhs) then
@@ -308,6 +311,9 @@ let parse file =
 	let id2var = parse_declare_var_sexps sexps in
 	let macro_instantiator =  parse_define_fun_sexps sexps in
 	let spec = parse_constraints_sexps sexps grammar target_function_name macro_instantiator id2var in
-	my_prerr_endline (Specification.string_of_io_spec spec);
+	let _ = my_prerr_endline (Specification.string_of_io_spec spec) in 
+	let _ = my_prerr_endline (string_of_map string_of_rewrite (string_of_set string_of_rewrite) grammar) in
+	let _ = my_prerr_endline (string_of_map (fun x -> x) string_of_expr args_map) in
+	let _ = my_prerr_endline (string_of_map string_of_rewrite string_of_type !Grammar.nt_type_map) in
 	(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)  
 ;;
