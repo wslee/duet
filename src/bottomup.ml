@@ -44,7 +44,7 @@ let rec p n k =
 ;;
 
 
-let rec level_up (lvl:int) (grammar : (rewrite, rewrite BatSet.t) BatMap.t) (nts : rewrite BatSet.t) (lvl2fun: (int, (rewrite, expr BatSet.t) BatMap.t) BatMap.t) =
+let rec level_up (lvl:int) (grammar : (rewrite, rewrite BatSet.t) BatMap.t) (nts : rewrite BatSet.t) (lvl2fun: (int, (rewrite, expr BatSet.t) BatMap.t) BatMap.t) spec =
   let nts_to_fun = BatSet.fold (fun nt acc ->
     let rules = BatMap.find nt grammar in
     let funs = BatSet.fold (fun rule fun_set ->
@@ -75,8 +75,14 @@ let rec level_up (lvl:int) (grammar : (rewrite, rewrite BatSet.t) BatMap.t) (nts
                 (* let _ = print_endline ((string_of_list (string_of_list string_of_expr)) children_ext) in *)
                 let nt_type = BatMap.find nt !Grammar.nt_type_map in
                 BatList.fold_right (fun children acc -> 
-                  BatSet.add (Function (op, children, nt_type)) acc 
-                  ) children_ext acc
+                  try (
+                    let f = Function (op, children, nt_type) in
+                    if (BatSet.is_empty (BatSet.intersect (BatSet.map (fun f' -> compute_signature spec f') acc) (BatSet.singleton (compute_signature spec f)))) then 
+                      BatSet.add f acc 
+                    else
+                      acc
+                  ) with _ -> acc 
+                ) children_ext acc
               else
                 acc
             ) partition fun_set
@@ -89,12 +95,39 @@ let rec level_up (lvl:int) (grammar : (rewrite, rewrite BatSet.t) BatMap.t) (nts
     propagation 1 grammar nts nts_to_fun
 ;;
 
+(* for PBE *)
+let pruning lvl2fun spec nt2fun nts =
+  BatMap.mapi (fun nt funs ->
+    BatSet.filter (fun f -> 
+      let sigs = compute_signature spec f in
+      let old_sigs = BatMap.foldi (fun lvl nt2fun acc -> 
+        let funs = BatMap.find nt nt2fun in
+        BatSet.fold (fun f acc -> 
+          BatSet.add (compute_signature spec f) acc
+        ) funs acc
+      ) lvl2fun BatSet.empty in
+      BatSet.is_empty (BatSet.intersect old_sigs (BatSet.singleton sigs))
+    ) funs
+  ) nt2fun
+;;
+(* TODO : pruning, evaluate *)
+
+let next_step lvl2fun lvl grammar nts spec = 
+  BatMap.add lvl (
+    pruning lvl2fun spec (level_up lvl grammar nts lvl2fun spec) nts
+  ) lvl2fun
+;;
+
 let synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) =
   let nts = BatMap.foldi (fun nt rules s -> (BatSet.add nt s)) grammar BatSet.empty in
   let nt_to_function = get_level_1 grammar nts in
   let start_nt = BatList.hd (BatSet.to_list nts) in
   let level_to_function = BatMap.singleton 1 nt_to_function in
-  let level_to_function = BatMap.add 2 (level_up 2 grammar nts level_to_function) level_to_function in
-  let level_to_function = BatMap.add 3 (level_up 3 grammar nts level_to_function) level_to_function in
+  let level_to_function = next_step level_to_function 2 grammar nts spec in
+  (* let level_to_function = next_step level_to_function 3 grammar nts spec in *)
+  (* let level_to_function = next_step level_to_function 4 grammar nts spec in *)
   level_to_function
+  (* let expr = BatList.hd (BatSet.elements (BatMap.find start_nt (BatMap.find 3 level_to_function))) in *)
+  (* let _ = print_endline (string_of_expr expr) in *)
+  (* compute_signature spec expr *)
 ;;
