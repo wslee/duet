@@ -66,6 +66,19 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     BatMap.add sz nt2idxes sz2idxes
   else
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
+      let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in
+      let old = ref BatSet.empty in
+      let rec get_old i () =
+        if i = 0 then ()
+        else 
+          let idxes = BatMap.find nt (BatMap.find i sz2idxes) in
+          let _ = BatSet.iter (fun idx ->
+            old := BatSet.add (compute_signature spec (expr_of_idx idx)) !old;
+          ) idxes in
+          get_old (i-1) ()
+      in
+      let _ = get_old (sz-1) () in
+      print_endline "old_function done!";
       let rules = BatMap.find nt grammar in
       let idxes = BatSet.fold (fun rule idxes ->
         match rule with
@@ -84,18 +97,30 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                 let rec get_idxes x acc () = 
                   match x with
                   | [] -> (
+                    (* add function to set *)
                     let idx = !nidx in
-                    let _ = nidx := !nidx + 1 in
-                    let _ = idx2node := BatMap.add idx (NonLeaf (BatMap.find rule !func2idx, acc)) !idx2node in
-                    now := BatSet.add idx !now
+                    let node = NonLeaf (BatMap.find rule !func2idx, acc) in
+                    (* print_endline (string_of_expr (expr_of_node node)); *)
+                    try (
+                      let out = compute_signature spec (expr_of_node node) in
+                      (* print_endline "pass"; *)
+                      if BatSet.mem out !old then ()
+                      else
+                        old := BatSet.add out !old;
+                        let _ = nidx := !nidx + 1 in
+                        let _ = idx2node := BatMap.add idx node !idx2node in
+                        now := BatSet.add idx !now
+                    ) with _ -> ();
+                    (* print_endline "get idxes done!"; *)
                   )
                   | (sz, nt)::tl -> (
                     let idxes' = BatMap.find nt (BatMap.find sz sz2idxes) in
                     BatSet.iter (fun idx -> 
                       get_idxes tl (idx::acc) ()
-                    ) idxes';
+                    ) idxes'
                   ) in 
                 let _ = get_idxes sz_x_nt [] () in
+                (* print_endline "get idxes done!"; *)
                 BatSet.union !now idxes
               else idxes
             ) partitions idxes in
@@ -103,6 +128,8 @@ let idxes_of_size sz grammar nts sz2idxes spec =
         )
         | _ -> idxes
       ) rules BatSet.empty in
+      (* let _ = print_endline (string_of_rewrite nt) in
+      let _ = print_endline (string_of_set string_of_int idxes) in *)
       BatMap.add nt idxes nt2idxes
     ) nts BatMap.empty in
     BatMap.add sz nt2idxes sz2idxes
@@ -117,7 +144,13 @@ let synthesis (macro_instantiator, target_function_name, args_map, grammar, fora
   let sz2idxes = idxes_of_size 2 grammar nts sz2idxes spec in
   let sz2idxes = idxes_of_size 3 grammar nts sz2idxes spec in
   let sz2idxes = idxes_of_size 4 grammar nts sz2idxes spec in
+  let sz2idxes = idxes_of_size 5 grammar nts sz2idxes spec in
+  let sz2idxes = idxes_of_size 6 grammar nts sz2idxes spec in
+  let sz2idxes = idxes_of_size 7 grammar nts sz2idxes spec in
+  let sz2idxes = idxes_of_size 8 grammar nts sz2idxes spec in
+  let sz2idxes = idxes_of_size 9 grammar nts sz2idxes spec in
+  (* let sz2idxes = idxes_of_size 10 grammar nts sz2idxes spec in *)
   let start_nt = BatList.hd (BatSet.to_list nts) in
-  let _ = print_endline (string_of_expr (expr_of_idx 1023)) in
+  let _ = print_endline "synthesis complete" in
   sz2idxes
 ;;
