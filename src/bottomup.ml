@@ -15,6 +15,9 @@ let fidx = ref 0;;
 let idx2func = ref BatMap.empty;; (* (int, (FuncRewrite, exprtype)) BatMap.t *)
 let func2idx = ref BatMap.empty;; (* (FuncRewrite, int) BatMap.t *)
 
+let nt2out = ref BatMap.empty;; (* (NTRewrite, const list) BatMap.t *)
+let idx2out = ref BatMap.empty;; (* (int, const list) BatMap.t *)
+
 let rec expr_of_node x =
   match x with
   | Leaf expr -> expr
@@ -43,13 +46,17 @@ let rec p n k =
 let idxes_of_size sz grammar nts sz2idxes spec = 
   if sz = 1 then
     let nt2idxes = BatSet.fold (fun nt nt2idxes ->
+      nt2out := BatMap.add nt BatSet.empty !nt2out;
+      (* print_endline ((string_of_rewrite nt) ^ (string_of_int sz)); *)
       let rules = BatMap.find nt grammar in
       let idxes = BatSet.fold (fun rule idxes ->
         match rule with
         | ExprRewrite expr -> (
           let idx = !nidx in
-          let _ = nidx := !nidx + 1 in
-          let _ = idx2node := BatMap.add idx (Leaf expr) !idx2node in
+          nidx := !nidx + 1;
+          idx2node := BatMap.add idx (Leaf expr) !idx2node;
+          idx2out := BatMap.add idx (compute_signature spec expr) !idx2out;
+          nt2out := BatMap.add nt (BatSet.add (compute_signature spec (expr_of_idx idx)) (BatMap.find nt !nt2out)) !nt2out;
           BatSet.add idx idxes
         )
         | FuncRewrite _ -> (
@@ -67,7 +74,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
   else
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
       let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in
-      let old = ref BatSet.empty in
+      (* let old = ref BatSet.empty in
       let rec get_old i () =
         if i = 0 then ()
         else 
@@ -78,7 +85,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
           get_old (i-1) ()
       in
       let _ = get_old (sz-1) () in
-      print_endline "old_function done!";
+      print_endline "old_function done!"; *)
       let rules = BatMap.find nt grammar in
       let idxes = BatSet.fold (fun rule idxes ->
         match rule with
@@ -104,11 +111,14 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     try (
                       let out = compute_signature spec (expr_of_node node) in
                       (* print_endline "pass"; *)
-                      if BatSet.mem out !old then ()
+                      if BatSet.mem out (BatMap.find nt !nt2out) then 
+                        (* let _ = print_endline "overlapped" in *)
+                        ()
                       else
-                        old := BatSet.add out !old;
-                        let _ = nidx := !nidx + 1 in
-                        let _ = idx2node := BatMap.add idx node !idx2node in
+                        nt2out := BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out;
+                        idx2out := BatMap.add idx out !idx2out;
+                        nidx := !nidx + 1;
+                        idx2node := BatMap.add idx node !idx2node;
                         now := BatSet.add idx !now
                     ) with _ -> ();
                     (* print_endline "get idxes done!"; *)
@@ -136,21 +146,38 @@ let idxes_of_size sz grammar nts sz2idxes spec =
 ;;
 
 (* TODO : pruning, check if valid function (no runtime-error)  *)
+let rec search sz nt is_start_nt grammar nts spec sz2idxes = 
+  let tg_out = BatList.map (fun (_, y) -> y) spec in
+  let trivial = Const (get_trivial_value (BatMap.find nt !Grammar.nt_type_map)) in
+  let sz2idxes = if is_start_nt then idxes_of_size sz grammar nts sz2idxes spec else sz2idxes in
+  let idxes = BatMap.find nt (BatMap.find sz sz2idxes) in
+  let (success, func) = BatSet.fold (fun idx (success, func) ->
+    if success then (success, func)
+    else
+      let out = BatMap.find idx !idx2out in
+      if BatList.for_all (fun (x, y) -> x=y) (BatList.combine tg_out out) then
+        (true, expr_of_idx idx)
+      else (success, func)
+  ) idxes (false, trivial) in
+  if success then (success, func)
+  else
+    let rules = BatMap.find nt grammar in
+    let (success, func) = BatSet.fold (fun rule (success, func) -> 
+      if success then (success, func)
+      else
+        match rule with
+        | NTRewrite _ -> search sz rule false grammar nts spec sz2idxes
+        | _ -> (success, func)
+    ) rules (success, func) in
+    if success then (success, func)
+    else if is_start_nt then search (sz+1) nt is_start_nt grammar nts spec sz2idxes
+    else (false, trivial)
+;;
 
 let synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) =
   let nts = BatMap.foldi (fun nt rules s -> (BatSet.add nt s)) grammar BatSet.empty in
-  let sz2idxes = idxes_of_size 1 grammar nts BatMap.empty spec in
-  (* let _ = print_endline (string_of_int (BatMap.cardinal (BatMap.find 1 sz2idxes))) in *)
-  let sz2idxes = idxes_of_size 2 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 3 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 4 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 5 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 6 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 7 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 8 grammar nts sz2idxes spec in
-  let sz2idxes = idxes_of_size 9 grammar nts sz2idxes spec in
-  (* let sz2idxes = idxes_of_size 10 grammar nts sz2idxes spec in *)
   let start_nt = BatList.hd (BatSet.to_list nts) in
+  let (_, func) = search 1 start_nt true grammar nts spec BatMap.empty in
   let _ = print_endline "synthesis complete" in
-  sz2idxes
+  func
 ;;
