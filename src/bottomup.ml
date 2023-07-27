@@ -73,7 +73,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     BatMap.add sz nt2idxes sz2idxes
   else
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
-      let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in
+      (* let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in *)
       (* let old = ref BatSet.empty in
       let rec get_old i () =
         if i = 0 then ()
