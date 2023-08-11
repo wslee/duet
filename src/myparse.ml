@@ -251,15 +251,15 @@ let parse_constraints_sexps sexps grammar target_function_name macro_instantiato
 					) in
 					if BatMap.mem (get_op oracle_expr) macro_instantiator then
 						let oracle_expr_resolved = BatMap.find (get_op oracle_expr) macro_instantiator in
-						let _ = Specification.oracle_expr := oracle_expr in
-						let _ = Specification.oracle_expr_resolved := oracle_expr_resolved in
+						let _ = Oracle.oracle_expr := oracle_expr in
+						let _ = Oracle.oracle_expr_resolved := oracle_expr_resolved in
 						let oracle_args = get_children oracle_expr in
 						let oracle_args_indexing = BatList.combine (BatList.range 0 `To ((BatList.length oracle_args)-1)) oracle_args in
 						let forall_var_map = BatList.fold_left (fun acc (index, arg) -> 
 							BatMap.add (Exprs.string_of_expr arg) (Param(index, (Exprs.type_of_expr arg))) acc
 						) BatMap.empty oracle_args_indexing in
 						let _ = Specification.forall_var_map := forall_var_map in
-						Specification.add_trivial_examples grammar spec
+						Oracle.init grammar spec
 					else
 						failwith "macro function is not defined"
 				else
