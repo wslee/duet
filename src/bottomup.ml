@@ -61,9 +61,9 @@ let idxes_of_size sz grammar nts sz2idxes spec =
         )
         | FuncRewrite _ -> (
           let idx = !fidx in
-          let _ = fidx := !fidx + 1 in
-          let _ = idx2func := BatMap.add idx (rule, BatMap.find nt !Grammar.nt_type_map) !idx2func in
-          let _ = func2idx := BatMap.add rule idx !func2idx in
+          fidx := !fidx + 1;
+          idx2func := BatMap.add idx (rule, BatMap.find nt !Grammar.nt_type_map) !idx2func;
+          func2idx := BatMap.add rule idx !func2idx;
           idxes
         )
         | _ -> idxes
@@ -74,7 +74,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
   else
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
       (* let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in *)
-      (* let old = ref BatSet.empty in
+      let old = ref BatSet.empty in
       let rec get_old i () =
         if i = 0 then ()
         else 
@@ -84,8 +84,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
           ) idxes in
           get_old (i-1) ()
       in
-      let _ = get_old (sz-1) () in
-      print_endline "old_function done!"; *)
+      get_old (sz-1) ();
       let rules = BatMap.find nt grammar in
       let idxes = BatSet.fold (fun rule idxes ->
         match rule with
@@ -111,12 +110,13 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     try (
                       let out = compute_signature spec (expr_of_node node) in
                       (* print_endline "pass"; *)
-                      if BatSet.mem out (BatMap.find nt !nt2out) then 
+                      (* if BatSet.mem out (BatMap.find nt !nt2out) then  *)
+                      if BatSet.mem out !old then
                         (* let _ = print_endline "overlapped" in *)
                         ()
                       else
-                        nt2out := BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out;
-                        idx2out := BatMap.add idx out !idx2out;
+                        (* nt2out := BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out; *)
+                        (* idx2out := BatMap.add idx out !idx2out; *)
                         nidx := !nidx + 1;
                         idx2node := BatMap.add idx node !idx2node;
                         now := BatSet.add idx !now
@@ -145,18 +145,26 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     BatMap.add sz nt2idxes sz2idxes
 ;;
 
-(* TODO : pruning, check if valid function (no runtime-error)  *)
 let rec search sz nt is_start_nt grammar nts spec sz2idxes = 
-  let tg_out = BatList.map (fun (_, y) -> y) spec in
+  let tg_out = ref (BatList.map (fun (_, y) -> y) spec) in
+  let ref_spec = ref spec in
   let trivial = Const (get_trivial_value (BatMap.find nt !Grammar.nt_type_map)) in
   let sz2idxes = if is_start_nt then idxes_of_size sz grammar nts sz2idxes spec else sz2idxes in
   let idxes = BatMap.find nt (BatMap.find sz sz2idxes) in
   let (success, func) = BatSet.fold (fun idx (success, func) ->
     if success then (success, func)
     else
-      let out = BatMap.find idx !idx2out in
-      if BatList.for_all (fun (x, y) -> x=y) (BatList.combine tg_out out) then
-        (true, expr_of_idx idx)
+      let out = compute_signature !ref_spec (expr_of_idx idx) in
+      if BatList.for_all (fun (x, y) -> x=y) (BatList.combine !tg_out out) then (
+        let idx_expr = expr_of_idx idx in
+        let cex_opt = Oracle.verify idx_expr !ref_spec in
+        match cex_opt with
+        | None -> (true, idx_expr)
+        | Some (cex_in, cex_out) ->
+          ref_spec := (cex_in, cex_out)::!ref_spec;
+          tg_out := cex_out::!tg_out;
+          (success, func)
+      )
       else (success, func)
   ) idxes (false, trivial) in
   if success then (success, func)
@@ -166,11 +174,11 @@ let rec search sz nt is_start_nt grammar nts spec sz2idxes =
       if success then (success, func)
       else
         match rule with
-        | NTRewrite _ -> search sz rule false grammar nts spec sz2idxes
+        | NTRewrite _ -> search sz rule false grammar nts !ref_spec sz2idxes
         | _ -> (success, func)
     ) rules (success, func) in
     if success then (success, func)
-    else if is_start_nt then search (sz+1) nt is_start_nt grammar nts spec sz2idxes
+    else if is_start_nt then search (sz+1) nt is_start_nt grammar nts !ref_spec sz2idxes
     else (false, trivial)
 ;;
 
