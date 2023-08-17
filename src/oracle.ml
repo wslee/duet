@@ -23,6 +23,8 @@ let oracle_expr_resolved = ref (Const (CInt 0)) (* body of oracle function -> ex
 
 let verify (sol : Exprs.expr) (spec : Specification.t) : ((Exprs.const list * Exprs.const) option) = 
   (* returns None if there is no counter-examples *)
+  (* print_endline (string_of_expr sol);
+  print_endline (string_of_list (fun (i, o) -> (string_of_list string_of_const i) ^ " -> " ^ (string_of_const o)) spec); *)
   if !oracle_expr = (Const (CInt 0)) then None
   else
     let ctx = Z3.mk_context  [("model", "true"); ("proof", "false")] in (* model : true -> make counter-example *)
@@ -68,13 +70,16 @@ let verify (sol : Exprs.expr) (spec : Specification.t) : ((Exprs.const list * Ex
           | _ -> assert false
         ) (BatSet.to_list params) in
         let cex_output = BatList.hd (compute_signature [(cex_input, CInt 0)] !oracle_expr_resolved) in
+        (* print_endline ("counter-example exists: " ^ (string_of_list string_of_const cex_input)); *)
         Some (cex_input, cex_output)
 ;;
 
 let init grammar spec =
-  let nts = BatMap.foldi (fun nt rules arr -> (nt::arr)) grammar [] in
-  let start_nt = BatList.hd nts in
-  let trivial_sol = Const (get_trivial_value (BatMap.find start_nt !Grammar.nt_type_map)) in
+  (* print_endline (string_of_expr !oracle_expr_resolved); *)
+  (* let nts = BatMap.foldi (fun nt rules arr -> (nt::arr)) grammar [] in
+  let start_nt = BatList.hd nts in *)
+  (* print_endline (Grammar.string_of_rewrite start_nt); *)
+  let trivial_sol = Const (get_trivial_value (BatMap.find Grammar.start_nt !Grammar.nt_type_map)) in
   let cex = verify trivial_sol spec in
   match cex with
   | None -> spec
