@@ -127,7 +127,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                   | (sz, nt)::tl -> (
                     let idxes' = BatMap.find nt (BatMap.find sz sz2idxes) in
                     BatSet.iter (fun idx -> 
-                      get_idxes tl (idx::acc) ()
+                      get_idxes tl (acc @ [idx]) ()
                     ) idxes'
                   ) in 
                 let _ = get_idxes sz_x_nt [] () in
