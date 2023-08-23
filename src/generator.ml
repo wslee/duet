@@ -11,6 +11,7 @@ let rec get_holes addr rule =
 	| FuncRewrite (op, rewrites) ->
 		List.flatten (List.mapi (fun i rewrite -> get_holes (addr@[i]) rewrite) rewrites)     
 	
+(* return : expr *)
 let plug rule instances =
 	let rec plug_sub curr_addr rule instances =
 		match rule with
@@ -77,10 +78,16 @@ let rec get_size_partitions holes target_size nt_to_exprs =
 let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec target_size =
 	let holes : (addr * rewrite(* NTRewrite *)) list = get_holes [] rule in
 	if (List.length holes) = 0 then (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)
+	(* -> if rule = expr then ... *)
+	(* ex. FuncRewrite (ite, [Bool; String; String]) 
+		 -> [([0], Bool); ([1], String); ([2], String)] 
+		 ex. NTRewrite String -> [([], String)]
+	*)
 	else
-	let rule_size = size_of_rewrite rule in  
+	let rule_size = size_of_rewrite rule in (* note : NTRewrite -> 0 / FuncRewrite -> 1 *)
 	(* let _ = my_prerr_endline (Printf.sprintf "Applying rule: %s -> %s" (string_of_rewrite nt) (string_of_rewrite rule)) in *)
 	let size_partitions = get_size_partitions holes (target_size - rule_size) nt_to_exprs in
+	(* note : P(target_size - rule_size, BatList.length holes) *)
 	(* let _ = my_prerr_endline (string_of_list (fun part -> string_of_list string_of_int part) size_partitions) in *)
 	let upper_bounds_list = 
 		List.map (fun size_partition ->
@@ -89,6 +96,7 @@ let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec targ
 				(fun ((_, nt), size) -> List.length (get_components nt nt_to_exprs size)) 
 				(List.combine holes size_partition)
 		) size_partitions 
+	(* note : mapping to # of components *)
 	in   
 	let generate_function : unit -> (addr * expr) list =
 		let size_partition_index = ref 0 in 
@@ -132,7 +140,7 @@ let grow nt rule (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) desired_sig spec targ
 	in  
 	try begin
 		while true do
-			let instances = BatEnum.get_exn generator in  
+			let instances = BatEnum.get_exn generator in  (* address * expr list *)
 			let expr = plug rule instances in
 			try
 				let signature = compute_signature spec expr in
