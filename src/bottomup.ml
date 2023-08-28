@@ -120,14 +120,15 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       let out = compute_signature spec (expr_of_node node) in
                       (* print_endline "pass"; *)
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
-                        (* let _ = print_endline "overlapped" in *)
+                        (* let _ = print_endline ("overlapped : " ^ (string_of_expr (expr_of_node node)) ^ " -> " ^ (string_of_list string_of_const out)) in *)
                         ()
                       else
-                        nt2out := BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out;
-                        idx2out := BatMap.add idx out !idx2out;
-                        nidx := !nidx + 1;
-                        idx2node := BatMap.add idx node !idx2node;
-                        now := BatSet.add idx !now
+                        let _ = nt2out := BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out in
+                        let _ = idx2out := BatMap.add idx out !idx2out in
+                        let _ = nidx := !nidx + 1 in
+                        let _ = idx2node := BatMap.add idx node !idx2node in
+                        let _ = now := BatSet.add idx !now in
+                        ()
                     ) with _ -> ();
                     (* print_endline "get idxes done!"; *)
                   )
@@ -139,6 +140,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                   ) in 
                 let _ = get_idxes sz_x_nt [] () in
                 (* print_endline "get idxes done!"; *)
+                (* print_endline (string_of_set string_of_expr (BatSet.map expr_of_idx !now)); *)
                 BatSet.union !now idxes
               else idxes
             ) partitions idxes in
@@ -202,4 +204,15 @@ let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes
       iter (i+1) size_to_nt_to_idxes
   in
   let size_to_nt_to_idxes = iter curr_size size_to_nt_to_idxes in
+  (* let nt_to_exprs = 
+    BatMap.map (fun idxes -> 
+      BatSet.map expr_of_idx idxes
+    ) (BatMap.find curr_size size_to_nt_to_idxes) in
+  (* let nt_to_sig = 
+    BatMap.map (fun idxes -> 
+      BatSet.map (fun idx -> BatMap.find idx !idx2out) idxes
+    ) (BatMap.find curr_size size_to_nt_to_idxes) in *)
+  print_endline (string_of_int curr_size);
+  print_endline (string_of_map string_of_rewrite (string_of_set string_of_expr) nt_to_exprs);
+  print_endline (string_of_map string_of_rewrite (string_of_set (string_of_list string_of_const)) !nt2out); *)
   (!nt2out, size_to_nt_to_idxes, !idx2out)
