@@ -47,13 +47,13 @@ let idxes_of_size sz grammar nts sz2idxes spec =
   (* print_endline (string_of_int sz); *)
   let start_t = Sys.time () in
   if sz = 1 then
-    nidx := 0;
-    idx2node := BatMap.empty;
-    fidx := 0;
-    idx2func := BatMap.empty;
-    func2idx := BatMap.empty;
-    nt2out := BatMap.empty;
-    idx2out := BatMap.empty;
+    let _ = nidx := 0 in
+    let _ = idx2node := BatMap.empty in
+    let _ = fidx := 0 in 
+    let _ = idx2func := BatMap.empty in 
+    let _ = func2idx := BatMap.empty in
+    let _ = nt2out := BatMap.empty in
+    let _ = idx2out := BatMap.empty in
     let nt2idxes = BatSet.fold (fun nt nt2idxes ->
       nt2out := BatMap.add nt BatSet.empty !nt2out;
       (* print_endline ((string_of_rewrite nt) ^ (string_of_int sz)); *)
@@ -182,10 +182,10 @@ let rec search sz nt is_start_nt grammar nts spec sz2idxes =
     else (false, trivial)
 ;;
 
-let synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) max_size =
+let synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) =
   let nts = BatMap.foldi (fun nt rules s -> (BatSet.add nt s)) grammar BatSet.empty in
   (* let start_nt = BatList.hd (BatSet.to_list nts) in *)
-  let (_, func) = search 1 Grammar.start_nt true grammar nts spec BatMap.empty max_size in
+  let (_, func) = search 1 Grammar.start_nt true grammar nts spec BatMap.empty in
   let _ = print_endline "synthesis complete" in
   func
 ;;
@@ -193,7 +193,7 @@ let synthesis (macro_instantiator, target_function_name, args_map, grammar, fora
 let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes 
 		nt_rule_list (curr_size, max_size) = 
   let grammar = BatSet.fold (fun nt grammar ->
-    BatMap.add nt (BatSet.of_list (BatList.filter (fun (nt_l, _) -> nt_l = nt) nt_rule_list)) grammar
+    BatMap.add nt (BatSet.of_list (BatList.map (fun (_, rule) -> rule) (BatList.filter (fun (nt_l, _) -> nt_l = nt) nt_rule_list))) grammar
   ) nts BatMap.empty in
   let rec iter i size_to_nt_to_idxes =
     if i >= max_size then size_to_nt_to_idxes
