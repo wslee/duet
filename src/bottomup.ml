@@ -9,7 +9,7 @@ type node =
 ;;
 
 let nidx = ref 0;;
-let idx2node = ref BatMap.empty;; (* (int, node) BatMap.t *)
+let idx2node = ref BatMap.empty;; (* (int, node) BatMap.t  *)
 
 let fidx = ref 0;;
 let idx2func = ref BatMap.empty;; (* (int, (FuncRewrite, exprtype)) BatMap.t *)
@@ -17,6 +17,9 @@ let func2idx = ref BatMap.empty;; (* (FuncRewrite, int) BatMap.t *)
 
 let nt2out = ref BatMap.empty;; (* (NTRewrite, const list) BatMap.t *)
 let idx2out = ref BatMap.empty;; (* (int, const list) BatMap.t *)
+
+let nt_order = ref [];; (* NTRewrite list *)
+let nt_edge = ref BatMap.empty;; (* (NTRewrite, NTRewrite BatSet.t) BatMap.t *)
 
 let rec expr_of_node x =
   match x with
@@ -192,8 +195,83 @@ let synthesis (macro_instantiator, target_function_name, args_map, grammar, fora
   func
 ;;
 
+let sort nts grammar = 
+  nt_order := [];
+  (* inDegree *)
+  let inD = ref (BatSet.fold (fun nt inD ->
+    BatMap.add nt 0 inD
+  ) nts BatMap.empty) in
+  (* initialize *)
+  nt_edge := BatSet.fold (fun nt nt_edge ->
+    BatMap.add nt BatSet.empty nt_edge
+  ) nts BatMap.empty;
+  (* make adj-list *)
+  let adj = BatMap.foldi (fun nt rules adj ->
+    (* print_endline (string_of_set string_of_rewrite rules); *)
+    BatSet.fold (fun rule now -> 
+      match rule with
+      | NTRewrite _ -> 
+      begin
+        (* print_endline ((string_of_rewrite nt) ^ " -> " ^ (string_of_rewrite rule)); *)
+        BatSet.add (rule, nt) now (* (StartString, Start) *)
+      end
+      | _ -> now 
+    ) rules adj
+  ) grammar BatSet.empty in
+  (* adj-list -> edge & inDegree *)
+  (* print_endline (string_of_set (fun (a, b) -> string_of_rewrite a ^ " -> " ^ string_of_rewrite b) adj); *)
+  BatSet.iter (fun (u, v) -> 
+    nt_edge := BatMap.add u (BatSet.add v (BatMap.find u !nt_edge)) !nt_edge;
+    inD := BatMap.add v ((BatMap.find v !inD) + 1) !inD;
+  ) adj;
+  (* topological sort *)
+  let queue = BatMap.foldi (fun nt indegree queue ->
+    if indegree = 0 then BatSet.add nt queue
+    else queue  
+  ) !inD BatSet.empty in
+  assert (not (BatSet.is_empty queue));
+  (* print_endline (string_of_map string_of_rewrite (string_of_set string_of_rewrite) !nt_edge); *)
+  let rec iter queue =
+    (* print_endline (string_of_set string_of_rewrite queue); *)
+    BatSet.iter (fun nt ->
+      nt_order := !nt_order @ [nt];
+      let adj = BatMap.find nt !nt_edge in
+      let next_queue = BatSet.fold (fun nt' next_queue ->
+        inD := BatMap.add nt' ((BatMap.find nt' !inD) - 1) !inD;
+        (* print_endline (string_of_map string_of_rewrite string_of_int !inD); *)
+        if (BatMap.find nt' !inD) = 0 then 
+          BatSet.add nt' next_queue
+        else next_queue
+      ) adj BatSet.empty in
+      if BatSet.is_empty next_queue then ()
+      else iter next_queue
+    ) queue
+  in
+  iter queue;
+  (* print_endline (string_of_list string_of_rewrite !nt_order); *)
+  (* print_endline (string_of_map string_of_rewrite (string_of_set string_of_rewrite) !nt_edge); *)
+;;
+
+let expand nts grammar nt2idxes =
+  if !nt_order = [] then 
+    sort nts grammar;
+  let nt2idxes_expand = nt2idxes in
+  let rec idxes_expand order expanded = 
+    match order with
+    | nt::order' -> 
+    begin
+      let nxt = BatMap.find nt !nt_edge in
+      BatSet.fold (fun nt' expanded ->
+        BatMap.add nt' (BatSet.union (BatMap.find nt' expanded) (BatMap.find nt expanded)) expanded
+      ) nxt expanded |> idxes_expand order' 
+    end
+    | _ -> expanded
+  in
+  idxes_expand !nt_order nt2idxes_expand
+;;
+
 let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes 
-		nt_rule_list (curr_size, max_size) = 
+    nt_rule_list full_grammar (curr_size, max_size) = 
   let grammar = BatSet.fold (fun nt grammar ->
     BatMap.add nt (BatSet.of_list (BatList.map (fun (_, rule) -> rule) (BatList.filter (fun (nt_l, _) -> nt_l = nt) nt_rule_list))) grammar
   ) nts BatMap.empty in
@@ -204,6 +282,8 @@ let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes
       iter (i+1) size_to_nt_to_idxes
   in
   let size_to_nt_to_idxes = iter curr_size size_to_nt_to_idxes in
+  let nt2idxes = expand nts full_grammar (BatMap.find curr_size size_to_nt_to_idxes) in
+  let size_to_nt_to_idxes = BatMap.add curr_size nt2idxes size_to_nt_to_idxes in
   (* let nt_to_exprs = 
     BatMap.map (fun idxes -> 
       BatSet.map expr_of_idx idxes
@@ -215,4 +295,5 @@ let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes
   print_endline (string_of_int curr_size);
   print_endline (string_of_map string_of_rewrite (string_of_set string_of_expr) nt_to_exprs);
   print_endline (string_of_map string_of_rewrite (string_of_set (string_of_list string_of_const)) !nt2out); *)
-  (!nt2out, size_to_nt_to_idxes, !idx2out)
+  (size_to_nt_to_idxes, !idx2out)
+;;
