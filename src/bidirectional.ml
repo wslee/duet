@@ -616,6 +616,8 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 	let nt_to_exprs : (rewrite, (expr * int) BatSet.t) BatMap.t = 
 		BatSet.fold (fun nt m -> BatMap.add nt BatSet.empty m) nts BatMap.empty 
 	in
+	(* size_to_nt_to_idxes: index of AST nodes whose size of expression is S from each nonterminal *)
+	let size_to_nt_to_idxes : (int, (rewrite, int BatSet.t) BatMap.t) BatMap.t = BatMap.empty in
 	(* nt_sig_to_expr: "(N, sig) -> expr" means expr is derivable from N and its output is sig *)
 	let nt_sig_to_expr : (rewrite * signature, expr) BatMap.t = BatMap.empty in
 	let desired_sig = List.map (fun (inputs, output) -> output) spec in
@@ -636,7 +638,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 	(* 	) grammar []                                                *)
 	(* in                                                            *)
 	let nt_rule_list = get_nt_rule_list grammar in
-	let rec iter max_component_size (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =
+	let rec iter max_component_size (nt_to_sigs, nt_to_exprs, nt_sig_to_expr, size_to_nt_to_idxes) =
 		(* clean up caches *)
 		let _ = init () in
 		let _ = 
@@ -647,16 +649,34 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
   	let prev_size_nt_sig_to_expr = BatMap.cardinal nt_sig_to_expr in
 		(** Component generation via Bottom-up enumeration *)
 		let start = Sys.time () in 
-		let (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) =
+		let (nt_to_sigs, size_to_nt_to_idxes, idx_to_sig) =
 			(* exclude ite's *)
 			(* when we add components, we don't have to add ite expressions as components; *)
 			(* ite expressions will be explored by a specialized mechanism (decision tree learning) *)
 			let nt_rule_list = exclude_ite_rules nt_rule_list in
-  		get_sigs_of_size desired_sig spec (nt_to_sigs, nt_to_exprs, nt_sig_to_expr) 
-				nt_rule_list (max_component_size, max_component_size + 1) 
+  		Bottomup.get_sigs_of_size desired_sig spec nts size_to_nt_to_idxes 
+				nt_rule_list grammar (max_component_size, max_component_size + 1) 
   	in 
+		let nt_sig_to_expr_ref = ref nt_sig_to_expr in
+		(* let nt_to_sigs_ref = ref nt_to_sigs in  *)
+		let nt_to_exprs = 
+			BatMap.mapi (fun nt idxes -> 
+				let exprs = BatSet.map (fun idx ->
+					let expr = Bottomup.expr_of_idx idx in
+					let expr_sig = try BatMap.find idx idx_to_sig with _ -> assert false in
+					nt_sig_to_expr_ref := BatMap.add (nt, expr_sig) expr !nt_sig_to_expr_ref;
+					(* nt_to_sigs_ref := BatMap.add nt (BatSet.add expr_sig (BatMap.find nt !nt_to_sigs_ref)) !nt_to_sigs_ref; *)
+					(expr, max_component_size) 
+				) idxes in
+				BatSet.union exprs (try BatMap.find nt nt_to_exprs with _ -> assert false)
+			) (BatMap.find max_component_size size_to_nt_to_idxes)
+		in
+		let nt_sig_to_expr = !nt_sig_to_expr_ref in
+		(* let nt_to_sigs = !nt_to_sigs_ref in *)
 		let _ = bu_time := !bu_time +. (Sys.time() -. start) in
 		(* set current component size *)
+		(* print_endline (string_of_map (fun (nt, sig') -> (string_of_rewrite nt) ^ " + " ^ (string_of_list string_of_const sig')) string_of_expr nt_sig_to_expr); *)
+		
 		let _ = curr_comp_size := max_component_size in
 		let _ = num_components := (BatMap.cardinal nt_sig_to_expr) in
 		my_prerr_endline (Printf.sprintf "max_component_size : %d - #components: %d" !curr_comp_size !num_components);
@@ -665,7 +685,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 		(* then continue generating components *)		
 		if (BatMap.cardinal nt_sig_to_expr) = prev_size_nt_sig_to_expr ||  
 			 max_component_size < !Options.init_comp_size then
-			iter (max_component_size + 1) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)	 
+			iter (max_component_size + 1) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr, size_to_nt_to_idxes)	 
 		else 
 		try
 			(* prerr_endline (Printf.sprintf "************ iter %d ************" max_component_size);                                                                              *)
@@ -677,7 +697,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 			(* BatMap.iter (fun nt sigs ->                                                                                                                                         *)
   		(* 	prerr_endline (Printf.sprintf "%s -> %s" (Grammar.string_of_rewrite nt) (string_of_set string_of_sig sigs))                                             *)
   		(* ) nt_to_sigs;                                                                                                                                                       *)
-  		let sol =
+			let sol =
       	let total_sigs =
       		BatMap.foldi (fun nt sigs total_sigs ->
       			BatSet.union sigs total_sigs
@@ -721,10 +741,10 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
   		in
   		sol 
 		with NoSolInVSA -> (* no solution found *) 
-			iter (max_component_size + 1) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)
+			iter (max_component_size + 1) (nt_to_sigs, nt_to_exprs, nt_sig_to_expr, size_to_nt_to_idxes)
 	in
 	try 
-		iter 1 (nt_to_sigs, nt_to_exprs, nt_sig_to_expr)
+		iter 1 (nt_to_sigs, nt_to_exprs, nt_sig_to_expr, size_to_nt_to_idxes)
 	with Generator.SolutionFound sol ->
 	(* a solution is found while generating components *) 
 		sol  
