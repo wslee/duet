@@ -255,19 +255,25 @@ let sort nts grammar =
 let expand nts grammar nt2idxes =
   if !nt_order = [] then 
     sort nts grammar;
-  let nt2idxes_expand = nt2idxes in
-  let rec idxes_expand order expanded = 
+  let nt2idxes_plus = nt2idxes in
+  (* TODO: out expand *)
+  let rec expand' order expanded = 
     match order with
     | nt::order' -> 
     begin
       let nxt = BatMap.find nt !nt_edge in
+      let now_idxes = BatMap.find nt expanded in
+      let now_sig = BatSet.map (fun idx ->
+        BatMap.find idx !idx2out
+      ) now_idxes in
       BatSet.fold (fun nt' expanded ->
-        BatMap.add nt' (BatSet.union (BatMap.find nt' expanded) (BatMap.find nt expanded)) expanded
-      ) nxt expanded |> idxes_expand order' 
+        nt2out := BatMap.add nt' (BatSet.union now_sig (BatMap.find nt' !nt2out)) !nt2out;
+        BatMap.add nt' (BatSet.union now_idxes (BatMap.find nt' expanded)) expanded
+      ) nxt expanded |> expand' order' 
     end
     | _ -> expanded
   in
-  idxes_expand !nt_order nt2idxes_expand
+  expand' !nt_order nt2idxes_plus
 ;;
 
 let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes 
@@ -293,7 +299,7 @@ let get_sigs_of_size _ (* desired_sig *) spec nts size_to_nt_to_idxes
       BatSet.map (fun idx -> BatMap.find idx !idx2out) idxes
     ) (BatMap.find curr_size size_to_nt_to_idxes) in *)
   print_endline (string_of_int curr_size);
-  print_endline (string_of_map string_of_rewrite (string_of_set string_of_expr) nt_to_exprs);
-  print_endline (string_of_map string_of_rewrite (string_of_set (string_of_list string_of_const)) !nt2out); *)
-  (size_to_nt_to_idxes, !idx2out)
+  print_endline (string_of_map string_of_rewrite (string_of_set string_of_expr) nt_to_exprs); *)
+  (* print_endline (string_of_map string_of_rewrite (string_of_set (string_of_list string_of_const)) !nt2out); *)
+  (!nt2out, size_to_nt_to_idxes, !idx2out)
 ;;
