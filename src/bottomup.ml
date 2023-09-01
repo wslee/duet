@@ -23,6 +23,7 @@ let nt_edge = ref BatMap.empty;; (* (NTRewrite, NTRewrite BatSet.t) BatMap.t *)
 
 let spec_out = ref [];;
 let alt_time = ref 0.0;;
+let compute_time = ref 0.0;;
 
 let rec expr_of_node x =
   match x with
@@ -161,9 +162,11 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     in
                     let _ = alt_time := !alt_time +. (Sys.time () -. start_t) in
                     try (
+                      let start_t = Sys.time () in
                       let out = compute_signature
                         (if use_new_spec then new_spec else spec)
                         (if use_new_spec then expr_for_now else expr_of_node node) in
+                      let _ = compute_time := !compute_time +. (Sys.time () -. start_t) in
                       (* print_endline "pass"; *)
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
                         (* let _ = print_endline ("overlapped : " ^ (string_of_expr (expr_of_node node)) ^ " -> " ^ (string_of_list string_of_const out)) in *)
@@ -175,7 +178,10 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                         let _ = idx2node := BatMap.add idx node !idx2node in
                         let _ = now := BatSet.add idx !now in
                         ()
-                    ) with _ -> ();
+                    ) with _ -> (
+                      let _ = compute_time := !compute_time +. (Sys.time () -. start_t) in
+                      ();
+                    )
                     (* print_endline "get idxes done!"; *)
                   )
                   | (sz, nt)::tl -> (
