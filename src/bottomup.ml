@@ -34,6 +34,13 @@ let rec expr_of_node x =
   )
 and expr_of_idx i = expr_of_node (BatMap.find i !idx2node);;
 
+let rec count_exprs node = 
+  match node with
+  | Leaf expr -> 1
+  | NonLeaf (_, children) -> 
+    BatList.fold_right (fun child cnt -> cnt + count_exprs (BatMap.find child !idx2node)) children 0
+;;
+
 (* partition *)
 (* TODO : use cache to solve with DP *)
 let rec p n k =
@@ -87,7 +94,6 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     ) nts BatMap.empty in
     BatMap.add sz nt2idxes sz2idxes
   else
-    
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
       (* let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in *)
       let rules = BatMap.find nt grammar in
@@ -96,20 +102,13 @@ let idxes_of_size sz grammar nts sz2idxes spec =
         | FuncRewrite (op, children) -> (
           if (BatList.length children) >= sz then idxes
           else 
-            let use_new_spec = (BatList.length children)*((BatList.length spec)+1) <= sz in
-            (* TODO : function whose children are all param *)
             let functype = BatMap.find nt !Grammar.nt_type_map in
             let expr_for_now = 
-              if use_new_spec then
-                Function (
-                  op,
-                  (BatList.fold_right (fun rewrite children ->
+                Function (op, (BatList.fold_right (fun rewrite children ->
                     children @ [Param (BatList.length children, BatMap.find rewrite !Grammar.nt_type_map)]
                   ) children []),
                   functype
                 )
-              else
-                Const (get_trivial_value functype)
             in
             let partitions = p (sz-1) (BatList.length children) in
             let idxes = BatList.fold_right (fun partition idxes ->
@@ -127,6 +126,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let idx = !nidx in
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* print_endline (string_of_expr (expr_of_node node)); *)
+                    let use_new_spec = 2*(BatList.length children) <= (count_exprs node) in
                     let new_spec = 
                       if use_new_spec then
                         let mapping_out = BatList.map (fun idx -> 
