@@ -21,6 +21,8 @@ let idx2out = ref BatMap.empty;; (* (int, const list) BatMap.t *)
 let nt_order = ref [];; (* NTRewrite list *)
 let nt_edge = ref BatMap.empty;; (* (NTRewrite, NTRewrite BatSet.t) BatMap.t *)
 
+let spec_out = ref [];;
+
 let rec expr_of_node x =
   match x with
   | Leaf expr -> expr
@@ -57,6 +59,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     let _ = func2idx := BatMap.empty in
     let _ = nt2out := BatMap.empty in
     let _ = idx2out := BatMap.empty in
+    let _ = spec_out := BatList.map (fun (_, y) -> y) spec in
     let nt2idxes = BatSet.fold (fun nt nt2idxes ->
       nt2out := BatMap.add nt BatSet.empty !nt2out;
       (* print_endline ((string_of_rewrite nt) ^ (string_of_int sz)); *)
@@ -86,23 +89,21 @@ let idxes_of_size sz grammar nts sz2idxes spec =
   else
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
       (* let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in *)
-      let old = ref BatSet.empty in
-      let rec get_old i () =
-        if i = 0 then ()
-        else 
-          let idxes = BatMap.find nt (BatMap.find i sz2idxes) in
-          let _ = BatSet.iter (fun idx ->
-            old := BatSet.add (compute_signature spec (expr_of_idx idx)) !old;
-          ) idxes in
-          get_old (i-1) ()
-      in
-      get_old (sz-1) ();
       let rules = BatMap.find nt grammar in
       let idxes = BatSet.fold (fun rule idxes ->
         match rule with
         | FuncRewrite (op, children) -> (
           if (BatList.length children) >= sz then idxes
           else 
+            (* TODO : function whose children are all param *)
+            let functype = BatMap.find nt !Grammar.nt_type_map in
+            let expr_for_now = Function (
+              op,
+              (BatList.fold_right (fun rewrite children ->
+                children @ [Param (BatList.length children, BatMap.find rewrite !Grammar.nt_type_map)]
+              ) children []),
+              functype
+            ) in
             let partitions = p (sz-1) (BatList.length children) in
             let idxes = BatList.fold_right (fun partition idxes ->
               let sz_x_nt = BatList.combine partition children in
@@ -119,8 +120,36 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let idx = !nidx in
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* print_endline (string_of_expr (expr_of_node node)); *)
+                    let new_spec = 
+                      let mapping_out = BatList.map (fun idx -> 
+                        BatMap.find idx !idx2out
+                      ) acc in
+                      let rec turning array2d turned =
+                        let rec aux array2d ((nxt_param, returned) as acc) =
+                          match array2d with 
+                          | [] -> acc
+                          | hd::tl -> 
+                          begin
+                            match hd with 
+                            | [] -> acc
+                            | sig_out::nxt -> aux tl (nxt_param @ [nxt], returned @ [sig_out]) 
+                          end
+                        in
+                        match array2d with
+                        | [] -> assert false
+                        | hd::tl ->
+                        begin
+                          if hd = [] then turned
+                          else
+                            let nxt_param, returned = aux array2d ([],[]) in
+                            turning nxt_param (turned @ [returned]) 
+                        end
+                      in
+                      let new_spec_in = turning mapping_out [] in 
+                      BatList.combine new_spec_in !spec_out
+                    in
                     try (
-                      let out = compute_signature spec (expr_of_node node) in
+                      let out = compute_signature new_spec expr_for_now in
                       (* print_endline "pass"; *)
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
                         (* let _ = print_endline ("overlapped : " ^ (string_of_expr (expr_of_node node)) ^ " -> " ^ (string_of_list string_of_const out)) in *)
