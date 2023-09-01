@@ -64,6 +64,7 @@ let main () =
 			prerr_endline ("# components : " ^ (string_of_int !Bidirectional.num_components));
 			prerr_endline ("time for composition : " ^ (Printf.sprintf "%.2f sec" !Bidirectional.td_time));
 			prerr_endline ("time for component generation : " ^ (Printf.sprintf "%.2f sec" !Bidirectional.bu_time));
+			prerr_endline ("time for alternative spec : " ^ (Printf.sprintf "%.2f sec" !Bottomup.alt_time));
 			prerr_endline ("**************************************************");
 			()
 		 

@@ -22,6 +22,7 @@ let nt_order = ref [];; (* NTRewrite list *)
 let nt_edge = ref BatMap.empty;; (* (NTRewrite, NTRewrite BatSet.t) BatMap.t *)
 
 let spec_out = ref [];;
+let alt_time = ref 0.0;;
 
 let rec expr_of_node x =
   match x with
@@ -57,7 +58,6 @@ let rec p n k =
 (* TODO : optimize with change expression [0, 1, 2, ... , n] to Range(0, n) *)
 let idxes_of_size sz grammar nts sz2idxes spec = 
   (* print_endline (string_of_int sz); *)
-  let start_t = Sys.time () in
   if sz = 1 then
     let _ = nidx := 0 in
     let _ = idx2node := BatMap.empty in
@@ -126,6 +126,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let idx = !nidx in
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* print_endline (string_of_expr (expr_of_node node)); *)
+                    let start_t = Sys.time () in
                     let use_new_spec = 2*(BatList.length children) <= (count_exprs node) in
                     let new_spec = 
                       if use_new_spec then
@@ -158,6 +159,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       else
                         []
                     in
+                    let _ = alt_time := !alt_time +. (Sys.time () -. start_t) in
                     try (
                       let out = compute_signature
                         (if use_new_spec then new_spec else spec)
