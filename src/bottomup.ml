@@ -87,6 +87,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     ) nts BatMap.empty in
     BatMap.add sz nt2idxes sz2idxes
   else
+    
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
       (* let _ = print_endline ((string_of_rewrite nt) ^ (string_of_int sz)) in *)
       let rules = BatMap.find nt grammar in
@@ -95,15 +96,21 @@ let idxes_of_size sz grammar nts sz2idxes spec =
         | FuncRewrite (op, children) -> (
           if (BatList.length children) >= sz then idxes
           else 
+            let use_new_spec = (BatList.length children)*((BatList.length spec)+1) <= sz in
             (* TODO : function whose children are all param *)
             let functype = BatMap.find nt !Grammar.nt_type_map in
-            let expr_for_now = Function (
-              op,
-              (BatList.fold_right (fun rewrite children ->
-                children @ [Param (BatList.length children, BatMap.find rewrite !Grammar.nt_type_map)]
-              ) children []),
-              functype
-            ) in
+            let expr_for_now = 
+              if use_new_spec then
+                Function (
+                  op,
+                  (BatList.fold_right (fun rewrite children ->
+                    children @ [Param (BatList.length children, BatMap.find rewrite !Grammar.nt_type_map)]
+                  ) children []),
+                  functype
+                )
+              else
+                Const (get_trivial_value functype)
+            in
             let partitions = p (sz-1) (BatList.length children) in
             let idxes = BatList.fold_right (fun partition idxes ->
               let sz_x_nt = BatList.combine partition children in
@@ -121,35 +128,40 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* print_endline (string_of_expr (expr_of_node node)); *)
                     let new_spec = 
-                      let mapping_out = BatList.map (fun idx -> 
-                        BatMap.find idx !idx2out
-                      ) acc in
-                      let rec turning array2d turned =
-                        let rec aux array2d ((nxt_param, returned) as acc) =
-                          match array2d with 
-                          | [] -> acc
-                          | hd::tl -> 
-                          begin
-                            match hd with 
+                      if use_new_spec then
+                        let mapping_out = BatList.map (fun idx -> 
+                          BatMap.find idx !idx2out
+                        ) acc in
+                        let rec turning array2d turned =
+                          let rec aux array2d ((nxt_param, returned) as acc) =
+                            match array2d with 
                             | [] -> acc
-                            | sig_out::nxt -> aux tl (nxt_param @ [nxt], returned @ [sig_out]) 
+                            | hd::tl -> 
+                            begin
+                              match hd with 
+                              | [] -> acc
+                              | sig_out::nxt -> aux tl (nxt_param @ [nxt], returned @ [sig_out]) 
+                            end
+                          in
+                          match array2d with
+                          | [] -> assert false
+                          | hd::tl ->
+                          begin
+                            if hd = [] then turned
+                            else
+                              let nxt_param, returned = aux array2d ([],[]) in
+                              turning nxt_param (turned @ [returned]) 
                           end
                         in
-                        match array2d with
-                        | [] -> assert false
-                        | hd::tl ->
-                        begin
-                          if hd = [] then turned
-                          else
-                            let nxt_param, returned = aux array2d ([],[]) in
-                            turning nxt_param (turned @ [returned]) 
-                        end
-                      in
-                      let new_spec_in = turning mapping_out [] in 
-                      BatList.combine new_spec_in !spec_out
+                        let new_spec_in = turning mapping_out [] in 
+                        BatList.combine new_spec_in !spec_out
+                      else
+                        []
                     in
                     try (
-                      let out = compute_signature new_spec expr_for_now in
+                      let out = compute_signature
+                        (if use_new_spec then new_spec else spec)
+                        (if use_new_spec then expr_for_now else expr_of_node node) in
                       (* print_endline "pass"; *)
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
                         (* let _ = print_endline ("overlapped : " ^ (string_of_expr (expr_of_node node)) ^ " -> " ^ (string_of_list string_of_const out)) in *)
