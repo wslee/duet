@@ -134,6 +134,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       | 1 -> true
                       | 2 -> 2*(BatList.length children) < (count_exprs node) - 1
                       | _ -> false
+                    in
                     let new_spec = 
                       if use_new_spec then
                         let mapping_out = BatList.map (fun idx -> 
