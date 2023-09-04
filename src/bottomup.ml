@@ -127,12 +127,13 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let idx = !nidx in
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* print_endline (string_of_expr (expr_of_node node)); *)
-                    let start_t = Sys.time () in
+                    let start_alt = Sys.time () in
                     let use_new_spec = 
                       match !Options.new_spec with
                       | 0 -> false
                       | 1 -> true
                       | 2 -> 2*(BatList.length children) < (count_exprs node) - 1
+                      | 3 -> (BatList.length children) != (sz - 1)
                       | _ -> false
                     in
                     let new_spec = 
@@ -166,7 +167,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       else
                         []
                     in
-                    let _ = alt_time := !alt_time +. (Sys.time () -. start_t) in
+                    let _ = alt_time := !alt_time +. (Sys.time () -. start_alt) in
                     let start_cpt = Sys.time () in
                     try (
                       let out = compute_signature
