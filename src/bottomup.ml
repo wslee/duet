@@ -129,7 +129,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     (* print_endline (string_of_expr (expr_of_node node)); *)
                     let start_t = Sys.time () in
                     let use_new_spec = if !Options.use_new_spec = 0 then 
-                      2*(BatList.length children) < (count_exprs node) - 1 in
+                      (2*(BatList.length children) < (count_exprs node) - 1)
                     else (if !Options.use_new_spec > 0 then true else false) in
                     let new_spec = 
                       if use_new_spec then
