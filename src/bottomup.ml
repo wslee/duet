@@ -133,7 +133,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       | 0 -> false
                       | 1 -> true
                       | 2 -> 2*(BatList.length children) < (count_exprs node) - 1
-                      | 3 -> (BatList.length children) != (sz - 1)
+                      | 3 -> (BatList.length children) <> (sz - 1)
                       | _ -> false
                     in
                     let new_spec = 
