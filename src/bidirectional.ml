@@ -11,6 +11,7 @@ let goal = ref (Grammar.start_nt, [])
 let now_learning = ref BatSet.empty 
 let bu_time = ref 0.
 let td_time = ref 0.
+let adapt_time = ref 0.
 let curr_comp_size = ref !Options.init_comp_size
 let num_components = ref 0   
 
@@ -659,6 +660,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
   	in 
 		let nt_sig_to_expr_ref = ref nt_sig_to_expr in
 		(* let nt_to_sigs_ref = ref nt_to_sigs in  *)
+		let adapt_start = Sys.time () in 
 		let nt_to_exprs = 
 			BatMap.mapi (fun nt idxes -> 
 				let exprs = BatSet.map (fun idx ->
@@ -672,6 +674,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 			) (BatMap.find max_component_size size_to_nt_to_idxes)
 		in
 		let nt_sig_to_expr = !nt_sig_to_expr_ref in
+		let _ = adapt_time := !adapt_time +. (Sys.time() -. adapt_start) in
 		(* let nt_to_sigs = !nt_to_sigs_ref in *)
 		let _ = bu_time := !bu_time +. (Sys.time() -. start) in
 		(* set current component size *)
@@ -679,6 +682,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 		
 		let _ = curr_comp_size := max_component_size in
 		let _ = num_components := (BatMap.cardinal nt_sig_to_expr) in
+		(* print_endline (Printf.sprintf "max_component_size : %d - #components: %d" !curr_comp_size !num_components); *)
 		my_prerr_endline (Printf.sprintf "max_component_size : %d - #components: %d" !curr_comp_size !num_components);
 		(* if no new component is added, or *)
 		(* current_comp_size does not reach the user-provided initial component size, *)
