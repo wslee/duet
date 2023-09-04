@@ -23,6 +23,7 @@ let nt_edge = ref BatMap.empty;; (* (NTRewrite, NTRewrite BatSet.t) BatMap.t *)
 
 let spec_out = ref [];;
 let alt_time = ref 0.0;;
+let alt_comp = ref 0;;
 let compute_time = ref 0.0;;
 
 let rec expr_of_node x =
@@ -133,9 +134,10 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       | 0 -> false
                       | 1 -> true
                       | 2 -> 2*(BatList.length children) < (count_exprs node) - 1
-                      | 3 -> (BatList.length children) <> (sz - 1)
+                      | 3 -> (BatList.length children) < (sz - 1)
                       | _ -> false
                     in
+                    (* print_endline((string_of_bool use_new_spec) ^ " -> " ^ (string_of_int (sz-1)) ^ " " ^ (string_of_int (BatList.length children))); *)
                     let new_spec = 
                       if use_new_spec then
                         let mapping_out = BatList.map (fun idx -> 
@@ -184,6 +186,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                         let _ = nidx := !nidx + 1 in
                         let _ = idx2node := BatMap.add idx node !idx2node in
                         let _ = now := BatSet.add idx !now in
+                        let _ = if use_new_spec then alt_comp := !alt_comp + 1 else () in
                         ()
                     ) with _ -> (
                       let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
