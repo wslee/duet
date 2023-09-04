@@ -8,7 +8,7 @@ let ex_all = ref false
 let fast_dt = ref false 
 let lbu = ref false 
 let z3_cli = ref false
-let new_spec = ref 0
+let new_spec = ref 2
 
 let options = 
 	[

@@ -128,9 +128,12 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* print_endline (string_of_expr (expr_of_node node)); *)
                     let start_t = Sys.time () in
-                    let use_new_spec = if !Options.new_spec = 0 then 
-                      (2*(BatList.length children) < (count_exprs node) - 1)
-                    else (if !Options.new_spec > 0 then true else false) in
+                    let use_new_spec = 
+                      match !Options.new_spec with
+                      | 0 -> false
+                      | 1 -> true
+                      | 2 -> 2*(BatList.length children) < (count_exprs node) - 1
+                      | _ -> false
                     let new_spec = 
                       if use_new_spec then
                         let mapping_out = BatList.map (fun idx -> 
@@ -163,12 +166,12 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                         []
                     in
                     let _ = alt_time := !alt_time +. (Sys.time () -. start_t) in
+                    let start_cpt = Sys.time () in
                     try (
-                      let start_t = Sys.time () in
                       let out = compute_signature
                         (if use_new_spec then new_spec else spec)
                         (if use_new_spec then expr_for_now else expr_of_node node) in
-                      let _ = compute_time := !compute_time +. (Sys.time () -. start_t) in
+                      let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
                       (* print_endline "pass"; *)
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
                         (* let _ = print_endline ("overlapped : " ^ (string_of_expr (expr_of_node node)) ^ " -> " ^ (string_of_list string_of_const out)) in *)
@@ -181,7 +184,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                         let _ = now := BatSet.add idx !now in
                         ()
                     ) with _ -> (
-                      let _ = compute_time := !compute_time +. (Sys.time () -. start_t) in
+                      let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
                       ();
                     )
                     (* print_endline "get idxes done!"; *)
