@@ -140,16 +140,19 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     (* print_endline((string_of_bool use_new_spec) ^ " -> " ^ (string_of_int (sz-1)) ^ " " ^ (string_of_int (BatList.length children))); *)
                     let new_spec = 
                       if use_new_spec then
-                        BatList.map (fun x -> BatMap.find x !idx2out) acc in
+                        BatList.map (fun x -> BatMap.find x !idx2out) acc
                       else
                         []
                     in
                     let _ = alt_time := !alt_time +. (Sys.time () -. start_alt) in
                     let start_cpt = Sys.time () in
                     try (
-                      let out = (if use_new_spec then evaluate_expr_faster else compute_signature)
-                        (if use_new_spec then new_spec else spec)
-                        (if use_new_spec then expr_for_now else expr_of_node node) in
+                      let out = (
+                        if use_new_spec then
+                          evaluate_expr_faster new_spec expr_for_now
+                        else
+                          compute_signature spec (expr_of_node node))
+                        in 
                       let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
                       (* print_endline "pass"; *)
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
