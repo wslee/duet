@@ -140,39 +140,14 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     (* print_endline((string_of_bool use_new_spec) ^ " -> " ^ (string_of_int (sz-1)) ^ " " ^ (string_of_int (BatList.length children))); *)
                     let new_spec = 
                       if use_new_spec then
-                        let mapping_out = BatList.map (fun idx -> 
-                          BatMap.find idx !idx2out
-                        ) acc in
-                        let rec turning array2d turned =
-                          let rec aux array2d ((nxt_param, returned) as acc) =
-                            match array2d with 
-                            | [] -> acc
-                            | hd::tl -> 
-                            begin
-                              match hd with 
-                              | [] -> acc
-                              | sig_out::nxt -> aux tl (nxt_param @ [nxt], returned @ [sig_out]) 
-                            end
-                          in
-                          match array2d with
-                          | [] -> assert false
-                          | hd::tl ->
-                          begin
-                            if hd = [] then turned
-                            else
-                              let nxt_param, returned = aux array2d ([],[]) in
-                              turning nxt_param (turned @ [returned]) 
-                          end
-                        in
-                        let new_spec_in = turning mapping_out [] in 
-                        BatList.combine new_spec_in !spec_out
+                        BatList.map (fun x -> BatMap.find x !idx2out) acc in
                       else
                         []
                     in
                     let _ = alt_time := !alt_time +. (Sys.time () -. start_alt) in
                     let start_cpt = Sys.time () in
                     try (
-                      let out = compute_signature
+                      let out = (if use_new_spec then evaluate_expr_faster else compute_signature)
                         (if use_new_spec then new_spec else spec)
                         (if use_new_spec then expr_for_now else expr_of_node node) in
                       let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
