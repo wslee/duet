@@ -8,7 +8,6 @@ let ex_all = ref false
 let fast_dt = ref false 
 let lbu = ref false 
 let z3_cli = ref false
-let new_spec = ref 1
 
 let options = 
 	[
@@ -22,5 +21,4 @@ let options =
 	 ("-max_height", Arg.Int (fun x -> max_height := x), "set the maximum height of candidates");
 	 ("-init_comp_size", Arg.Int (fun x -> init_comp_size := x), "set the initial size of components");
 	 ("-z3cli", Arg.Set z3_cli, "Use Z3 via command line interface");
-	 ("-new_spec", Arg.Int (fun x -> new_spec := x), "Use new specification strategy")
   ]
