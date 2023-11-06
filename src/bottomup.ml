@@ -67,7 +67,6 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     let _ = func2idx := BatMap.empty in
     let _ = nt2out := BatMap.empty in
     let _ = idx2out := BatMap.empty in
-    let _ = spec_out := BatList.map (fun (_, y) -> y) spec in
 
     (* mapping (NT, indexes of node that can generate from NT) *)
     let nt2idxes = BatSet.fold (fun nt nt2idxes ->
