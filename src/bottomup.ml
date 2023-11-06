@@ -138,7 +138,6 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let new_spec = BatList.map (fun x -> BatMap.find x !idx2out) acc in
                     try (
                       let out = evaluate_expr_faster new_spec expr_for_now in 
-                      let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
                       if BatSet.mem out (BatMap.find nt !nt2out) then 
                         ()
                       else
@@ -149,7 +148,6 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                         let _ = now := BatSet.add idx !now in
                         ()
                     ) with _ -> (
-                      let _ = compute_time := !compute_time +. (Sys.time () -. start_cpt) in
                       ();
                     )
                   )
