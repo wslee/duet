@@ -439,7 +439,18 @@ let rec evaluate_expr param_valuation expr =
 		let values = List.map (evaluate_expr param_valuation) exprs in
 		fun_apply_signature op values
 	| _ -> assert false
-				  
+
+(* alt_spec : (const list) list *)
+let rec evaluate_expr_faster alt_spec expr =
+	let len = try List.length (List.hd alt_spec) with _ -> assert false in  
+	match expr with 
+	| Const const -> BatList.make len const   
+	| Param (pos, ty) -> (try (List.nth alt_spec pos) with _ -> assert false) 
+	| Function (op, exprs, ty) ->
+		let values = List.map (evaluate_expr_faster alt_spec) exprs in
+		fun_apply_signature op values
+	| _ -> assert false
+
 let compute_signature spec expr = 
 	(* param_valuation : (int, const list) BatMap.t *)
 	let param_valuation =  
