@@ -276,7 +276,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = Specification.oracle_expr := oracle_expr in
 				let _ = Specification.oracle_expr_resolved := oracle_expr_resolved in
 				(* forall_var_map : variable name -> Param(int, ty) *)
-				let _, forll_var_map = 
+				let _, forall_var_map = 
 					let args = get_children oracle_expr in 
 					List.fold_left (fun (i, m) var_expr ->
 						let name = Exprs.string_of_expr var_expr in 
@@ -289,6 +289,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				failwith ("Not supported: synth-fun is missing")
 		else
 			let _ = LogicalSpec.add_constraint exp in
+			spec
 	) Specification.empty_spec constraints_data 
 
 let parse file = 
