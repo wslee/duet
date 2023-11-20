@@ -241,7 +241,6 @@ let process_forall_vars forall_vars_data =
 (* [L[ A:= L[ A:hd20 A:x] L[ A:f A:x]]] *)
 (* (constraint (= (f #xeed40423e830e30d) #x8895fdee0be78e79)) *)
 (* [L[ A:= L[ A:f A:#xeed40423e830e30d] A:#x8895fdee0be78e79]] *) 
-(* currently, only for PBE *)
 (* return: spec as Exprs.expr *)
 let process_constraints grammar target_function_name constraints_data macro_instantiator id2var =
 	BatList.fold_left (fun spec constraint_data ->
@@ -277,7 +276,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = Specification.oracle_expr := oracle_expr in
 				let _ = Specification.oracle_expr_resolved := oracle_expr_resolved in
 				(* forall_var_map : variable name -> Param(int, ty) *)
-				let _, forall_var_map = 
+				let _, forll_var_map = 
 					let args = get_children oracle_expr in 
 					List.fold_left (fun (i, m) var_expr ->
 						let name = Exprs.string_of_expr var_expr in 
@@ -288,7 +287,8 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				Specification.add_trivial_examples grammar spec
 			else 
 				failwith ("Not supported: synth-fun is missing")
-		else failwith ("Not supported: not a SyGuS-pbe specification")
+		else
+			let _ = LogicalSpec.add_constraint exp in
 	) Specification.empty_spec constraints_data 
 
 let parse file = 
