@@ -12,6 +12,10 @@ let spec = ref empty_spec
 let add_constraint e = 
 	spec := (e :: !spec)
 
+	let forall_var_map : (string, Exprs.expr) BatMap.t ref =
+		(* name -> Var *) 
+		ref BatMap.empty
+
 let string_of_logical_spec logical_spec = 
 	string_of_list string_of_expr logical_spec
 
@@ -26,7 +30,7 @@ let rec resolve_expr sol target_function_name args_map expr  =
 						BatMap.add param_expr (Var(id, ty)) acc  
 					) args_map BatMap.empty
 				in
-				change_param_to_var param2var expr
+				change_param_to_var param2var sol
 			else
 				Function (op, BatList.map (resolve_expr sol target_function_name args_map) exprs, ty)
 		end
@@ -40,9 +44,28 @@ let get_counter_example sol iospec target_function_name args_map =
 		let combined = BatList.fold_left (fun acc_expr e ->
 				(* STEP 02 : resolve target function *)
 				Function ("and", [acc_expr; (resolve_expr sol target_function_name args_map e)], Bool)
-			) (List.hd !spec) (List.tl !spec)
+			) (resolve_expr sol target_function_name args_map (List.hd !spec)) (List.tl !spec)
 		in
+		print_endline ("combined : " ^ (string_of_expr combined));
 		(* STEP 03 : make Z3 query *)
+		let params_str = 
+			begin
+				BatMap.fold (fun var acc ->
+					match var with
+					| Var (id, ty) -> 
+						Printf.sprintf "%s\n(declare-const %s %s)" 
+						acc id (string_of_type ~z3:true ty)
+					| -> assert false
+				) !forall_var_map ""
+			end
+		in
+		let z3query = params_str ^ (Printf.sprintf "\n(assert (not %s))" Exprs.string_of_expr combined) in
+		(* process query *)
+    let exprSMT = Z3.SMT.parse_smtlib2_string ctx str [] [] [] [] in (* Z3.AST.ASTVector.ast_vector *)
+    let sat = Z3.AST.ASTVector.to_expr_list exprSMT in (* Z3.Expr.expr list *)
+    let solver = (Z3.Solver.mk_solver ctx None) in (* Z3.Solver.solver *)
+  	(Z3.Solver.add solver sat);
+    let q = (Z3.Solver.check solver []) in (* ZMT.Solver.status *)
 		(* STEP 04 : get cex-in as counter example *)
 		None
 

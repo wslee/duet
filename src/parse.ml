@@ -288,6 +288,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			else 
 				failwith ("Not supported: synth-fun is missing")
 		else
+			(* check if spec is reletional *)
 			let _ = LogicalSpec.add_constraint exp in
 			spec
 	) Specification.empty_spec constraints_data 
@@ -337,6 +338,7 @@ let parse file =
 	let constraints_data = filter_sexps_for "constraint" sexps in
 	(* prerr_endline (string_of_list string_of_sexp (BatSet.choose constraints_data)); *)
 	let spec = process_constraints grammar target_function_name constraints_data macro_instantiator id2var in
+	let _ = LogicalSpec.forall_var_map := forall_var_map in (* to make Z3 query *)
 	let _ = LogicalSpec.add_trivial_examples spec target_function_name args_map in
 	my_prerr_endline (Specification.string_of_io_spec spec);
 	(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)  
