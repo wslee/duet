@@ -14,7 +14,14 @@ let sexp_to_const sexp =
 		(CBV (Int64.of_string ("0" ^ (BatString.lchop ~n:1 str))))		
 	else if (str.[0] = '\"') then
 		(* let _ = prerr_endline str in *)
-		(CString (BatString.replace_chars (function '\"' -> "" | ';' -> "" | c -> BatString.make 1 c) str))
+		(* TODO : make it available if only logic is LIA *)
+		let re = Str.regexp {|"(- \([0-9]+\))"|} in
+		if (Str.string_match re str 0) then 
+			(* when I got "(- 1)" *)
+			CInt (- (int_of_string (Str.matched_group 1 str)))
+		else
+			(* otherwise *)
+			(CString (BatString.replace_chars (function '\"' -> "" | ';' -> "" | c -> BatString.make 1 c) str))
 	else 
 		try (CInt (int_of_string str)) with _ -> (CString str)
 		
