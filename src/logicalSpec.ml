@@ -4,6 +4,38 @@ open Exprs
 open Z3
 open BidirectionalUtils
 
+let rec string_of_sexp sexp = 
+	match sexp with
+	| Sexp.List sexps -> "L["^(BatList.fold_left (fun acc sexp -> acc ^ " " ^ (string_of_sexp sexp)) "" sexps) ^ "]"
+	| Sexp.Atom s -> "A:" ^ (*s*) (Sexp.to_string sexp)
+
+let sexp_to_const sexp = 
+	let str = Sexp.to_string sexp in 
+	if (String.compare str "true") = 0 then Const (CBool (Concrete true))
+	else if (String.compare str "false") = 0 then Const (CBool (Concrete false))
+	else if (BatString.starts_with str "#x") then 
+		Const (CBV (Int64.of_string ("0" ^ (BatString.lchop ~n:1 str))))
+	else if (BatString.starts_with str "#u") then 
+		Const (CBV (Int64.of_string ("0" ^ (BatString.lchop ~n:1 str))))		
+	else if (str.[0] = '\"') then
+		(* let _ = prerr_endline str in *)
+		Const (CString (BatString.replace_chars (function '\"' -> "" | ';' -> "" | c -> BatString.make 1 c) str))
+	else 
+		try Const (CInt (int_of_string str)) with _ -> Const (CString str)
+	
+let rec sexp_to_cex sexp = 
+	match sexp with 
+	| Sexp.List sexps' ->
+		let _ = assert ((BatList.length sexps') >= 1) in  
+		let op = Sexp.to_string (BatList.nth sexps' 0) in
+		let sexps' = (BatList.remove_at 0 sexps') in 
+		let children = 
+			BatList.map (fun sexp' -> sexp_to_cex sexp') sexps'
+		in  
+		Function (op, children, Grammar.ret_type_of_op (Grammar.FuncRewrite (op, [])))
+	| Sexp.Atom s ->
+		sexp_to_const sexp 	
+
 type t = (Exprs.expr) list
 let empty_spec : t = []
 
@@ -83,7 +115,8 @@ let get_counter_example sol iospec target_function_name args_map =
 		match q with
     | UNSATISFIABLE -> None
     | UNKNOWN -> assert false
-    | SATISFIABLE -> 
+    | SATISFIABLE ->  
+			(* can get counter-example *)
       let model_opt = Z3.Solver.get_model solver in
       match model_opt with
       | None -> assert false
@@ -99,8 +132,9 @@ let get_counter_example sol iospec target_function_name args_map =
             BatMap.add name interp acc
         ) decls BatMap.empty in
         let cex_var_map = BatMap.foldi (fun id _ acc ->
-					let sexp = BatMap.find id name2expr in
-					BatMap.add id (Specification.sexp_to_const (Sexp.Atom (Z3.Expr.to_string sexp))) acc
+					let z3expr = BatMap.find id name2expr in
+					let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
+					BatMap.add id (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp))) acc
 				) !forall_var_map BatMap.empty in
 				print_endline ("cex_var_map : " ^ (string_of_map (fun e -> e) string_of_const cex_var_map));
 				None
