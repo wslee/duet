@@ -36,11 +36,21 @@ let rec sexp_to_cex sexp =
 	| Sexp.Atom s ->
 		sexp_to_const sexp 	
 
+let rec plug_in expr target_function_name cex_in_map =
+	match expr with
+	| Const _ -> expr
+	| Var (id, _) -> BatMap.find id cex_in_map 
+	| Function (op, exprs, ty) -> 
+		if op = target_function_name then Var (target_function_name, ty)
+		else Function (op, BatList.map (fun e -> plug_in e target_function_name cex_in_map) exprs, ty)
+	| _ -> assert false (* Param *)
+
 type t = (Exprs.expr) list
 let empty_spec : t = []
 
 (* constraints that consist of logical spec *)
 let spec = ref empty_spec
+(* all possible parameters of target function *)
 let target_params : (Exprs.expr list) BatSet.t ref = ref BatSet.empty
 
 let add_constraint e target_function_name = 
@@ -64,21 +74,22 @@ let forall_var_map : (string, Exprs.expr) BatMap.t ref =
 let string_of_logical_spec logical_spec = 
 	string_of_list string_of_expr logical_spec
 
-let rec resolve_expr sol target_function_name args_map expr  = 
+(* parameter -> var *)
+let rec resolve_expr sol target_function_name expr  = 
 	match expr with
 	| Function (op, exprs, ty) -> 
-		begin
-			if op = target_function_name then
-				let param2var = 
-					BatMap.foldi (fun id param_expr acc ->
-						let ty = type_of_expr param_expr in 
-						BatMap.add param_expr (Var(id, ty)) acc  
-					) args_map BatMap.empty
-				in
-				change_param_to_var param2var sol
-			else
-				Function (op, BatList.map (resolve_expr sol target_function_name args_map) exprs, ty)
+		if op = target_function_name then
+		begin 
+			let param2var = 
+				BatList.fold_left (fun acc var ->
+					let ty = type_of_expr var in
+					let param = Param(BatMap.cardinal acc, ty) in 
+					BatMap.add param var acc  
+				) BatMap.empty exprs
+			in
+			change_param_to_var param2var sol
 		end
+		else Function (op, BatList.map (resolve_expr sol target_function_name) exprs, ty)
 	| _ -> expr
 
 let get_counter_example sol iospec target_function_name args_map = 
@@ -86,11 +97,24 @@ let get_counter_example sol iospec target_function_name args_map =
 	else 
 		let ctx = Z3.mk_context	[("model", "true"); ("proof", "false")] in
 		(* STEP 01 : make logical spec to one expression (combine by 'and') *)
-		let combined = BatList.fold_left (fun acc_expr e ->
+		(* let combined = BatList.fold_left (fun acc_expr e ->
 				(* STEP 02 : resolve target function *)
 				Function ("and", [acc_expr; (resolve_expr sol target_function_name args_map e)], Bool)
 			) (resolve_expr sol target_function_name args_map (List.hd !spec)) (List.tl !spec)
-		in
+		in *)
+		let combined_spec = BatList.fold_left (fun acc_expr e -> 
+			Function ("and", [acc_expr; e], Bool)
+		) (List.hd !spec) (List.tl !spec) in
+		(* args_map : string -> Expr.Param : x1 -> Param(0, Int) *)
+		(* param2var : Expr.Param -> Expr.Var : Param(0, Int) -> Var(x1, Int) *)
+		(* let param2var = 
+			BatMap.foldi (fun id param_expr acc ->
+				let ty = type_of_expr param_expr in 
+				BatMap.add param_expr (Var(id, ty)) acc  
+			) args_map BatMap.empty
+		in *)
+		print_endline ("combined_spec : " ^ (string_of_expr combined_spec));
+		let combined = resolve_expr sol target_function_name combined_spec in
 		print_endline ("combined : " ^ (string_of_expr combined));
 		(* STEP 03 : make Z3 query *)
 		let params_str = 
@@ -112,6 +136,7 @@ let get_counter_example sol iospec target_function_name args_map =
   	(Z3.Solver.add solver sat);
     let q = (Z3.Solver.check solver []) in (* ZMT.Solver.status *)
 		(* STEP 04 : get cex-in as counter example *)
+		let cex_var_map_opt = 
 		match q with
     | UNSATISFIABLE -> None
     | UNKNOWN -> assert false
@@ -131,13 +156,19 @@ let get_counter_example sol iospec target_function_name args_map =
           | Some interp -> 
             BatMap.add name interp acc
         ) decls BatMap.empty in
+				(* (string, const) BatMap.t *)
         let cex_var_map = BatMap.foldi (fun id _ acc ->
 					let z3expr = BatMap.find id name2expr in
 					let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
 					BatMap.add id (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp))) acc
 				) !forall_var_map BatMap.empty in
 				print_endline ("cex_var_map : " ^ (string_of_map (fun e -> e) string_of_const cex_var_map));
-				None
+				Some (cex_var_map)
+		in 
+		(* let cex_var_map =
+		match cex_var_map_opt with
+		 *)
+		None
 ;;
 
 let add_trivial_examples iospec target_function_name args_map =
