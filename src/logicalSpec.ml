@@ -105,7 +105,7 @@ let rec resolve_expr sol target_function_name expr  =
 		else Function (op, BatList.map (resolve_expr sol target_function_name) exprs, ty)
 	| _ -> expr
 
-let get_counter_example sol iospec target_function_name args_map = 
+let get_counter_example sol target_function_name args_map = 
 	if !spec = [] then None (* can't found logical spec *)
 	else 
 		let ctx = Z3.mk_context	[("model", "true"); ("proof", "false")] in
@@ -126,9 +126,9 @@ let get_counter_example sol iospec target_function_name args_map =
 				BatMap.add param_expr (Var(id, ty)) acc  
 			) args_map BatMap.empty
 		in *)
-		print_endline ("combined_spec : " ^ (string_of_expr combined_spec));
+		(* print_endline ("combined_spec : " ^ (string_of_expr combined_spec)); *)
 		let combined = resolve_expr sol target_function_name combined_spec in
-		print_endline ("combined : " ^ (string_of_expr combined));
+		(* print_endline ("combined : " ^ (string_of_expr combined)); *)
 		(* STEP 03 : make Z3 query *)
 		let params_str = 
 			begin
@@ -177,7 +177,7 @@ let get_counter_example sol iospec target_function_name args_map =
 					BatMap.add id (Const (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)))) acc
 					(* BatMap.add id (Const (CInt (-2))) acc *)
 				) !forall_var_map BatMap.empty in
-				print_endline ("cex_var_map : " ^ (string_of_map (fun e -> e) string_of_expr cex_var_map));
+				(* print_endline ("cex_var_map : " ^ (string_of_map (fun e -> e) string_of_expr cex_var_map)); *)
 				Some (cex_var_map)
 		end
 		in 
@@ -196,7 +196,7 @@ let get_counter_example sol iospec target_function_name args_map =
 				) !target_params (BatMap.empty, [])
 			in
 			let combined = plug_in combined_spec target_function_name cex_var_map (param2sig, sig_list) in
-			print_endline ("combined : " ^ (string_of_expr combined));
+			(* print_endline ("combined : " ^ (string_of_expr combined)); *)
 			let _, params_str = 
 				begin
 					BatList.fold_left (fun (idx, acc) sig_in ->
@@ -237,15 +237,15 @@ let get_counter_example sol iospec target_function_name args_map =
 								((String.length target_function_name) + (String.length !identifier) ) 
 								((String.length sig_id) - ((String.length target_function_name) + (String.length !identifier)))
 							in
-							print_endline ("id_parse : " ^ id_parse);
+							(* print_endline ("id_parse : " ^ id_parse); *)
 							let sig_idx = int_of_string id_parse in
 							let sig_in = List.nth sig_list sig_idx in
 							let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
 					 		let sig_out = List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)) in 
 							BatSet.add (sig_in, sig_out) acc
 					)	name2expr BatSet.empty in
-					print_endline ("cex_all : " ^ (string_of_set (fun (sig_in, sig_out) -> 
-						(string_of_list string_of_const sig_in) ^ " -> " ^ (string_of_const sig_out)) cex_all));
+					(* print_endline ("cex_all : " ^ (string_of_set (fun (sig_in, sig_out) -> 
+						(string_of_list string_of_const sig_in) ^ " -> " ^ (string_of_const sig_out)) cex_all)); *)
 					Some (cex_all)
 			end
 			| _ -> assert false
@@ -254,8 +254,8 @@ let get_counter_example sol iospec target_function_name args_map =
 		cex
 ;;
 
-let add_trivial_examples iospec target_function_name args_map =
+let add_trivial_examples target_function_name args_map =
 	let trivial_sol = 
 		Exprs.Const (Exprs.get_trivial_value (Grammar.type_of_nt Grammar.start_nt))
 	in
-	get_counter_example trivial_sol iospec target_function_name args_map
+	get_counter_example trivial_sol target_function_name args_map
