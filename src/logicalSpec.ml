@@ -251,7 +251,7 @@ let get_counter_example sol iospec target_function_name args_map =
 			| _ -> assert false
 		end 
 		in 
-		None
+		cex
 ;;
 
 let add_trivial_examples iospec target_function_name args_map =
