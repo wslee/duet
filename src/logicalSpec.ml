@@ -255,7 +255,28 @@ let get_counter_example sol target_function_name args_map =
 ;;
 
 let add_trivial_examples target_function_name args_map =
-	let trivial_sol = 
-		Exprs.Const (Exprs.get_trivial_value (Grammar.type_of_nt Grammar.start_nt))
-	in
-	get_counter_example trivial_sol target_function_name args_map
+	if !spec = [] then None 
+	else 
+		let trivial_sol = 
+			Exprs.Const (Exprs.get_trivial_value (Grammar.type_of_nt Grammar.start_nt))
+		in
+		let exp_opt = get_counter_example trivial_sol target_function_name args_map in
+		match exp_opt with
+		| None -> 
+			let cex_in =
+				BatMap.fold (fun param cex_in ->
+					match param with
+					| Param (pos, ty) ->
+						BatList.modify_at pos (fun _ -> 
+							(Exprs.get_trivial_value ty)
+						) cex_in
+					| _ -> assert false
+				) args_map (BatList.make (BatMap.cardinal args_map) (CInt 0))
+			in
+			let cex_out =
+				match trivial_sol with
+				| Const c -> c
+				| _ -> assert false
+			in
+			Some (BatSet.singleton (cex_in, cex_out))
+		| _ -> exp_opt
