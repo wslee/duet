@@ -252,6 +252,15 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			let children = get_children exp in
 			let arg0 = BatList.nth children 0 in
 			let arg1 = BatList.nth children 1 in
+			let is_oracle_spec =
+				if (Exprs.is_function_expr arg0) && (Exprs.is_function_expr arg1) then 
+					let op0 = get_op arg0 in
+					let op1 = get_op arg1 in
+					((BatString.equal op0 target_function_name) && (BatMap.mem op1 macro_instantiator))
+					|| ((BatString.equal op1 target_function_name) && (BatMap.mem op0 macro_instantiator))
+				else
+					false
+			in
 			(* PBE spec: (f input) = output  *)
 			if (Exprs.is_const_expr arg0) || (Exprs.is_const_expr arg1) then
 				let inputs, output = 
@@ -264,7 +273,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let inputs = BatList.map expr2const inputs in   
 				Specification.add_io_spec (inputs, output) spec
 			(* Oracle spec: (f inputs) = (f' inputs) *)
-			else if (Exprs.is_function_expr arg0) && (Exprs.is_function_expr arg1) then 
+			else if is_oracle_spec then 
 				let oracle_expr, target_expr = 
 					if (BatString.equal (get_op arg0) target_function_name) then 
 						arg1, arg0
