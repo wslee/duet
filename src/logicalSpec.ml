@@ -172,12 +172,14 @@ let get_counter_example sol target_function_name args_map =
         ) decls BatMap.empty in
 				(* (string, const) BatMap.t *)
         let cex_var_map = BatMap.foldi (fun id _ acc ->
-					let z3expr = BatMap.find id name2expr in
-					let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
-					BatMap.add id (Const (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)))) acc
+					try
+						let z3expr = BatMap.find id name2expr in
+						let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
+						BatMap.add id (Const (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)))) acc
+					(* don't care term *)
+					with _ -> BatMap.add id (Const (get_trivial_value (type_of_expr (BatMap.find id !forall_var_map)))) acc
 					(* BatMap.add id (Const (CInt (-2))) acc *)
 				) !forall_var_map BatMap.empty in
-				(* print_endline ("cex_var_map : " ^ (string_of_map (fun e -> e) string_of_expr cex_var_map)); *)
 				Some (cex_var_map)
 		end
 		in 
