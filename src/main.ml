@@ -43,7 +43,19 @@ let main () =
 				(* no mismatched input-output examples *)
 				if (List.length spec) = (List.length spec') then 
 					match (if !Options.z3_cli then Specification.verify_cli else Specification.verify) sol spec with 
-					| None -> sol 
+					| None -> 
+						begin
+							match (LogicalSpec.get_counter_example sol target_function_name args_map) with
+							| None -> 
+								prerr_endline ("# specs : " ^ (string_of_int (List.length spec)));
+								(* prerr_endline (Specification.string_of_io_spec spec); *)
+								sol
+							| Some cex_all ->
+								let spec' = BatSet.fold (fun cex spec ->
+									Specification.add_io_spec cex spec
+								) cex_all spec in
+								cegis spec'
+						end
 					| Some cex ->
 						my_prerr_endline (Specification.string_of_io_spec [cex]); 
 						let _ = assert (not (List.mem cex spec')) in  
