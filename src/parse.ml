@@ -58,7 +58,11 @@ let rec sexp_to_expr sexp args_map =
 		let children = 
 			BatList.map (fun sexp' -> sexp_to_expr sexp' args_map) sexps'
 		in  
-		let expr_ty = sexp_to_type sexp in 
+		let expr_ty = 
+			try Grammar.ret_type_of_op (Grammar.FuncRewrite (op, []))
+			(* TODO : macro *)
+			with _ -> type_of_nt (Grammar.start_nt) (* maybe target-function *)
+		in 
 		Function (op, children, expr_ty)
 	| Sexp.Atom s ->
 		let id = (Sexp.to_string sexp) in 
