@@ -37,6 +37,7 @@ let rec sexp_to_cex sexp =
 		sexp_to_const sexp 	
 
 let identifier = ref "_"
+let do_enumeration = ref false
 
 (* make expr to get counter-example with Z3 *)
 let rec plug_in expr target_function_name cex_in_map (param2sig, sig_list) =
@@ -69,16 +70,22 @@ let target_params : (Exprs.expr list) BatSet.t ref = ref BatSet.empty
 let add_constraint e target_function_name = 
 	let _ = spec := (e :: !spec) in (* add constraints to spec *)
 	(* add parameters of target_function to target_params *)
+	let temporary_params = ref BatSet.empty in
 	let rec find_params e target_function_name =
 		match e with
 		| Function (op, exprs, _) -> 
 			if op = target_function_name then
-				target_params := BatSet.add exprs !target_params
+				let _ = target_params := BatSet.add exprs !target_params in
+				temporary_params := BatSet.add exprs !temporary_params
 			else
 				BatList.iter (fun e -> find_params e target_function_name) exprs
 		| _ -> ()
 	in
-	find_params e target_function_name	
+	let _ = find_params e target_function_name in 
+	if ((BatSet.cardinal !temporary_params) >= 2) then
+		do_enumeration := true
+	else 
+		()
 
 let forall_var_map : (string, Exprs.expr) BatMap.t ref =
 	(* name -> Var *) 
@@ -149,6 +156,13 @@ let get_counter_example sol target_function_name args_map =
   	(Z3.Solver.add solver sat);
     let q = (Z3.Solver.check solver []) in (* ZMT.Solver.status *)
 		(* STEP 04 : get cex-in as counter example *)
+		(* print_endline "no problem!"; *)
+		if !do_enumeration then 
+			match q with
+			| UNSATISFIABLE -> None
+			| SATISFIABLE -> Some (BatSet.empty) 
+			| UNKNOWN -> assert false
+		else
 		let cex_var_map_opt = 
 		match q with
     | UNSATISFIABLE -> None
@@ -156,7 +170,7 @@ let get_counter_example sol target_function_name args_map =
     | SATISFIABLE ->
 		begin  
 			(* can get counter-example *)
-      let model_opt = Z3.Solver.get_model solver in
+			let model_opt = Z3.Solver.get_model solver in
       match model_opt with
       | None -> assert false
       | Some model ->

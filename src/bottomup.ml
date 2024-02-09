@@ -79,8 +79,14 @@ let idxes_of_size sz grammar nts sz2idxes spec =
           let idx = !nidx in
           nidx := !nidx + 1;
           idx2node := BatMap.add idx (Leaf expr) !idx2node;
-          idx2out := BatMap.add idx (compute_signature spec expr) !idx2out;
-          nt2out := BatMap.add nt (BatSet.add (compute_signature spec (expr_of_idx idx)) (BatMap.find nt !nt2out)) !nt2out;
+          idx2out := 
+            if !LogicalSpec.do_enumeration then
+              !idx2out
+            else BatMap.add idx (compute_signature spec expr) !idx2out;
+          nt2out := 
+            if !LogicalSpec.do_enumeration then
+              !nt2out
+            else BatMap.add nt (BatSet.add (compute_signature spec (expr_of_idx idx)) (BatMap.find nt !nt2out)) !nt2out;
           BatSet.add idx idxes
         )
         | FuncRewrite _ -> (
@@ -137,12 +143,22 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     (* for equivalence param valuation *)
                     let new_spec = BatList.map (fun x -> BatMap.find x !idx2out) acc in
                     try (
-                      let out = evaluate_expr_faster new_spec expr_for_now in 
-                      if BatSet.mem out (BatMap.find nt !nt2out) then 
+                      let out = 
+                        if !LogicalSpec.do_enumeration then
+                          []
+                        else
+                          evaluate_expr_faster new_spec expr_for_now in 
+                      if not (!LogicalSpec.do_enumeration) && BatSet.mem out (BatMap.find nt !nt2out) then 
                         ()
                       else
-                        let _ = nt2out := BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out in
-                        let _ = idx2out := BatMap.add idx out !idx2out in
+                        let _ = nt2out := 
+                          if !LogicalSpec.do_enumeration then
+                            !nt2out
+                          else BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out in
+                        let _ = idx2out :=  
+                          if !LogicalSpec.do_enumeration then
+                            !idx2out
+                          else BatMap.add idx out !idx2out in
                         let _ = nidx := !nidx + 1 in
                         let _ = idx2node := BatMap.add idx node !idx2node in
                         let _ = now := BatSet.add idx !now in
@@ -173,7 +189,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
     BatMap.add sz nt2idxes sz2idxes
 ;;
 
-let rec search sz nt is_start_nt grammar nts spec sz2idxes = 
+(* let rec search sz nt is_start_nt grammar nts spec sz2idxes = 
   let tg_out = BatList.map (fun (_, y) -> y) spec in
   let trivial = Const (get_trivial_value (BatMap.find nt !Grammar.nt_type_map)) in
   let sz2idxes = if is_start_nt then idxes_of_size sz grammar nts sz2idxes spec else sz2idxes in
@@ -199,12 +215,39 @@ let rec search sz nt is_start_nt grammar nts spec sz2idxes =
     if success then (success, func)
     else if is_start_nt then search (sz+1) nt is_start_nt grammar nts spec sz2idxes
     else (false, trivial)
+;; *)
+
+let rec enumerate sz nt is_start_nt grammar nts _ sz2idxes target_function_name args_map = 
+  let trivial = Const (get_trivial_value (BatMap.find nt !Grammar.nt_type_map)) in
+  let sz2idxes = if is_start_nt then idxes_of_size sz grammar nts sz2idxes [] else sz2idxes in
+  let idxes = BatMap.find nt (BatMap.find sz sz2idxes) in
+  let (success, func) = BatSet.fold (fun idx (success, func) ->
+    if success then (success, func)
+    else
+      let candidate = expr_of_idx idx in
+      let cex_opt = LogicalSpec.get_counter_example candidate target_function_name args_map in
+      match cex_opt with
+      | None -> (true, candidate)
+      | Some _ -> (false, trivial)
+  ) idxes (false, trivial) in
+  if success then (success, func)
+  else
+    let rules = BatMap.find nt grammar in
+    let (success, func) = BatSet.fold (fun rule (success, func) -> 
+      if success then (success, func)
+      else
+        match rule with
+        | NTRewrite _ -> enumerate sz rule false grammar nts [] sz2idxes target_function_name args_map
+        | _ -> (success, func)
+    ) rules (success, func) in
+    if success then (success, func)
+    else if is_start_nt then enumerate (sz+1) nt is_start_nt grammar nts [] sz2idxes target_function_name args_map
+    else (false, trivial)
 ;;
 
 let synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) =
   let nts = BatMap.foldi (fun nt rules s -> (BatSet.add nt s)) grammar BatSet.empty in
-  let (_, func) = search 1 Grammar.start_nt true grammar nts spec BatMap.empty in
-  let _ = print_endline "synthesis complete" in
+  let (_, func) = enumerate 1 Grammar.start_nt true grammar nts spec BatMap.empty target_function_name args_map in
   func
 ;;
 

@@ -62,8 +62,12 @@ let main () =
 						cegis (cex :: spec')
 				else cegis spec'
 			in
-			let _ = assert ((List.length spec) > 0) in 
-			let sol =
+			let sol = 
+			if !LogicalSpec.do_enumeration then
+				(* let _ = print_endline "enumerating" in *)
+				Bottomup.synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) 
+			else 
+				let _ = assert ((List.length spec) > 0) in 
 				if !Options.ex_all then cegis spec_total 
 				else cegis [List.nth spec 0] 
 			in
