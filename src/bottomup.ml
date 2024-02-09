@@ -101,6 +101,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
       ) rules BatSet.empty in
       BatMap.add nt idxes nt2idxes
     ) nts BatMap.empty in
+    print_endline "done!";
     BatMap.add sz nt2idxes sz2idxes
   else (* sz > 1 *)
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
@@ -119,6 +120,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                 functype
               )
             in
+            print_endline (string_of_expr expr_for_now);
             (* get partition *)
             let partitions = p (sz-1) (BatList.length children) in
             (* get indexes of node that can generate from nt *)
@@ -141,7 +143,12 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let idx = !nidx in
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* for equivalence param valuation *)
-                    let new_spec = BatList.map (fun x -> BatMap.find x !idx2out) acc in
+                    let new_spec = 
+                      if !LogicalSpec.do_enumeration then
+                        []
+                      else
+                        BatList.map (fun x -> BatMap.find x !idx2out) acc 
+                    in
                     try (
                       let out = 
                         if !LogicalSpec.do_enumeration then
