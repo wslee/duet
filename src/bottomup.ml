@@ -101,7 +101,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
       ) rules BatSet.empty in
       BatMap.add nt idxes nt2idxes
     ) nts BatMap.empty in
-    print_endline "done!";
+    (* print_endline "done!"; *)
     BatMap.add sz nt2idxes sz2idxes
   else (* sz > 1 *)
     let nt2idxes = BatSet.fold (fun nt nt2idxes -> 
@@ -120,7 +120,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                 functype
               )
             in
-            print_endline (string_of_expr expr_for_now);
+            (* print_endline (string_of_expr expr_for_now); *)
             (* get partition *)
             let partitions = p (sz-1) (BatList.length children) in
             (* get indexes of node that can generate from nt *)
