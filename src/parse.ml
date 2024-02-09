@@ -261,8 +261,19 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				else
 					false
 			in
+			let is_pbe_spec =
+				if (Exprs.is_const_expr arg0) || (Exprs.is_const_expr arg1) then
+					let target_expr = if (Exprs.is_const_expr arg0) then arg1 else arg0 in
+					if (Exprs.is_function_expr target_expr) && (get_op target_expr) = target_function_name then 
+						let children = Exprs.get_children target_expr in
+						BatList.for_all (fun child -> Exprs.is_const_expr child) children
+					else 
+						false
+				else
+					false
+			in	
 			(* PBE spec: (f input) = output  *)
-			if (Exprs.is_const_expr arg0) || (Exprs.is_const_expr arg1) then
+			if is_pbe_spec then
 				let inputs, output = 
 					if (BatString.equal (get_op arg0) target_function_name) then 
 						(get_children arg0, expr2const arg1)
@@ -295,7 +306,8 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = Specification.forall_var_map := forall_var_map in 
 				Specification.add_trivial_examples grammar spec
 			else 
-				failwith ("Not supported: synth-fun is missing")
+				let _ = LogicalSpec.add_constraint exp target_function_name in
+				spec
 		else
 			(* check if spec is reletional *)
 			let _ = LogicalSpec.add_constraint exp target_function_name in
