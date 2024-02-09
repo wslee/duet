@@ -425,7 +425,7 @@ let fun_apply_signature op values =
 		let num1s = List.map get_int (List.nth values 0) in
 		let num2s = List.map get_int (List.nth values 1) in
 		List.map2 (fun num1 num2 -> CInt (num1 / num2)) num1s num2s
-	else if (String.compare op "%") = 0 then
+	else if (String.compare op "%") = 0 || (String.compare op "mod") = 0 then
 		let num1s = List.map get_int (List.nth values 0) in
 		let num2s = List.map get_int (List.nth values 1) in
 		List.map2 (fun num1 num2 -> CInt (num1 mod num2)) num1s num2s
