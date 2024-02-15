@@ -310,10 +310,19 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = Specification.forall_var_map := forall_var_map in 
 				Specification.add_trivial_examples grammar spec
 			else 
+				let _ =
+					try 
+						assert ((BatMap.cardinal macro_instantiator) = 0)
+					with _ -> failwith "Non-oracle spec cannot be mixed with macro definitions.";
+				in
 				let _ = LogicalSpec.add_constraint exp target_function_name in
 				spec
 		else
-			(* check if spec is reletional *)
+			let _ =
+				try 
+					assert ((BatMap.cardinal macro_instantiator) = 0)
+				with _ -> failwith "Non-oracle spec cannot be mixed with macro definitions.";
+			in
 			let _ = LogicalSpec.add_constraint exp target_function_name in
 			spec
 	) Specification.empty_spec constraints_data 
