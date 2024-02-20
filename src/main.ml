@@ -64,7 +64,7 @@ let main () =
 			in
 			let sol = 
 			if !LogicalSpec.do_enumeration then
-				(* let _ = print_endline "enumerating" in *)
+				let _ = print_endline "Found relational function. Do enumeration. It may takes more time than expected." in
 				Bottomup.synthesis (macro_instantiator, target_function_name, args_map, grammar, forall_var_map, spec) 
 			else 
 				let _ = assert ((List.length spec) > 0) in 
