@@ -305,6 +305,19 @@ let process_forall_vars forall_vars_data =
 		BatMap.add name (Var(name, ty)) m 
 	) BatMap.empty forall_vars_data    
 
+let process_primed_vars forall_vars_data =
+	BatList.fold_left (fun m forall_var_data ->
+		let _ = assert ((BatList.length forall_var_data) = 2) in  
+  	let (name_data, type_data) = 
+  		(BatList.nth forall_var_data 0, BatList.nth forall_var_data 1)
+  	in
+		let name = Sexp.to_string name_data in
+		let ty = sexp_to_type type_data in
+		(* set up the domain. the range will be determined later *) 
+		let m = BatMap.add name (Var(name, ty)) m in
+		BatMap.add (name ^ "!") (Var(name ^ "!", ty)) m 
+	) BatMap.empty forall_vars_data    
+
 (* (constraint (= (hd01 x) (f x))) *)
 (* [L[ A:= L[ A:hd20 A:x] L[ A:f A:x]]] *)
 (* (constraint (= (f #xeed40423e830e30d) #x8895fdee0be78e79)) *)
@@ -391,6 +404,8 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			spec
 	) Specification.empty_spec constraints_data 
 
+let 
+
 let parse file = 
 	Random.self_init(); 
 	let lines = read_lines file in
@@ -437,6 +452,17 @@ let parse file =
 				failwith "No target function to be synthesized is given."
 			else if (BatList.length synth_invs_data) > 1 then 
 				failwith "Multi-function synthesis is not supported."
+		in
+		let target_function_name, args_map, grammar = 
+			process_synth_invs (BatList.hd synth_invs_data) 
+		in
+		let primed_vars_data = filter_sexps_for "declare-primed-var" sexps in
+		let id2var =
+			if (BatList.is_empty primed_vars_data) then
+				let forall_vars_data = filter_sexps_for "declare-var" sexps in
+				process_forall_vars forall_vars_data
+			else
+				process_primed_vars primed_vars_data 
 		in
 
 	end
