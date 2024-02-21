@@ -227,7 +227,71 @@ let process_synth_funcs synth_fun_data =
 	let ret_type = sexp_to_type ret_type_data in
 	let grammar = process_grammar args_map ret_type grammar_data in 
 	(name, args_map, grammar) 
-	
+
+let process_synth_invs synth_inv_data =
+	let _ = assert ((BatList.length synth_inv_data) = 4 || (BatList.length synth_inv_data) = 3) in  
+	let (name_data, args_data, ret_type_data) = 
+		(BatList.nth synth_inv_data 0, BatList.nth synth_inv_data 1, 
+		 BatList.nth synth_inv_data 2)
+	in
+	let grammar_data =
+		try BatList.nth synth_inv_data 3
+		with _ ->
+			Sexp.List [
+				Sexp.List [
+					Sexp.Atom "Start";
+					Sexp.Atom "Bool";
+					Sexp.List [
+						Sexp.Atom "true";
+						Sexp.Atom "false";
+						Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "not"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "and"; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "or"; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "="; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "<"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "<="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom ">"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom ">="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+					]
+				];
+				Sexp.List [
+					Sexp.List [
+						Sexp.Atom "StartInt";
+						Sexp.Atom "Int";
+						Sexp.List [
+							Sexp.Atom "0";
+							Sexp.Atom "1";
+							Sexp.Atom "2";
+							Sexp.Atom "3";
+							Sexp.Atom "4";
+							Sexp.Atom "5";
+							Sexp.Atom "6";
+							Sexp.Atom "7";
+							Sexp.Atom "8";
+							Sexp.Atom "9";
+							Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+							Sexp.List [Sexp.Atom "+"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+							Sexp.List [Sexp.Atom "-"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+							Sexp.List [Sexp.Atom "*"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+							Sexp.List [Sexp.Atom "/"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+							Sexp.List [Sexp.Atom "mod"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						]
+					]
+				]
+			] 
+		in
+	let name = Sexp.to_string name_data in
+	let args_map = get_args_map args_data in  
+	let ret_type = sexp_to_type ret_type_data in
+	let grammar = process_grammar args_map ret_type grammar_data 
+	in
+	(name, args_map, grammar) 
+
+(* (declare-var x (BitVec 64)) *)
+(* L[ A:declare-var L[ A:x L[ A:BitVec A:64]]] *)
+
 (* return: name -> Var expr *)
 let process_forall_vars forall_vars_data =
 	BatList.fold_left (fun m forall_var_data ->
@@ -374,7 +438,7 @@ let parse file =
 			else if (BatList.length synth_invs_data) > 1 then 
 				failwith "Multi-function synthesis is not supported."
 		in
-		 
+
 	end
 	else
 	begin
