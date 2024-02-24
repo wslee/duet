@@ -234,14 +234,22 @@ let process_synth_invs synth_inv_data =
 		(BatList.nth synth_inv_data 0, BatList.nth synth_inv_data 1, 
 		 try BatList.nth synth_inv_data 2 with _ -> Sexp.Atom "Bool")
 	in
+	let args_map = get_args_map args_data in  
 	let grammar_data =
 		try BatList.nth synth_inv_data 3
 		with _ ->
 			Sexp.List [
 				Sexp.List [
 					Sexp.Atom "Start";
-					Sexp.Atom "Bool";
-					Sexp.List [
+					Sexp.Atom "Bool"; 
+					Sexp.List (BatMap.foldi (fun id param acc ->
+						match param with
+						| Param(i, ty) -> 
+							if ty = Bool then 
+								acc @ [Sexp.Atom id]
+							else acc
+						| _ -> assert false
+					)	args_map [
 						Sexp.Atom "true";
 						Sexp.Atom "false";
 						Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "Start"; Sexp.Atom "Start"];
@@ -254,12 +262,19 @@ let process_synth_invs synth_inv_data =
 						Sexp.List [Sexp.Atom ">"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
 						Sexp.List [Sexp.Atom ">="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
 						Sexp.List [Sexp.Atom "="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-					]
+					])
 				];
 				Sexp.List [
 					Sexp.Atom "StartInt";
 					Sexp.Atom "Int";
-					Sexp.List [
+					Sexp.List (BatMap.foldi (fun id param acc ->
+						match param with
+						| Param(i, ty) -> 
+							if ty = Int then 
+								acc @ [Sexp.Atom id]
+							else acc
+						| _ -> assert false
+					)	args_map [
 						Sexp.Atom "0";
 						Sexp.Atom "1";
 						Sexp.Atom "2";
@@ -276,12 +291,11 @@ let process_synth_invs synth_inv_data =
 						Sexp.List [Sexp.Atom "*"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
 						Sexp.List [Sexp.Atom "/"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
 						Sexp.List [Sexp.Atom "mod"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-					]
+					])
 				]
 			] 
 		in
-	let name = Sexp.to_string name_data in
-	let args_map = get_args_map args_data in  
+	let name = Sexp.to_string name_data in 
 	let ret_type = sexp_to_type ret_type_data in
 	let grammar = process_grammar args_map ret_type grammar_data 
 	in
