@@ -229,10 +229,10 @@ let process_synth_funcs synth_fun_data =
 	(name, args_map, grammar) 
 
 let process_synth_invs synth_inv_data =
-	let _ = assert ((BatList.length synth_inv_data) = 4 || (BatList.length synth_inv_data) = 3) in  
+	let _ = assert ((BatList.length synth_inv_data) = 4 || (BatList.length synth_inv_data) = 3 || (BatList.length synth_inv_data) = 2) in  
 	let (name_data, args_data, ret_type_data) = 
 		(BatList.nth synth_inv_data 0, BatList.nth synth_inv_data 1, 
-		 BatList.nth synth_inv_data 2)
+		 try BatList.nth synth_inv_data 2 with _ -> Sexp.Atom "Bool")
 	in
 	let grammar_data =
 		try BatList.nth synth_inv_data 3
@@ -257,27 +257,25 @@ let process_synth_invs synth_inv_data =
 					]
 				];
 				Sexp.List [
+					Sexp.Atom "StartInt";
+					Sexp.Atom "Int";
 					Sexp.List [
-						Sexp.Atom "StartInt";
-						Sexp.Atom "Int";
-						Sexp.List [
-							Sexp.Atom "0";
-							Sexp.Atom "1";
-							Sexp.Atom "2";
-							Sexp.Atom "3";
-							Sexp.Atom "4";
-							Sexp.Atom "5";
-							Sexp.Atom "6";
-							Sexp.Atom "7";
-							Sexp.Atom "8";
-							Sexp.Atom "9";
-							Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-							Sexp.List [Sexp.Atom "+"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-							Sexp.List [Sexp.Atom "-"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-							Sexp.List [Sexp.Atom "*"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-							Sexp.List [Sexp.Atom "/"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-							Sexp.List [Sexp.Atom "mod"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
-						]
+						Sexp.Atom "0";
+						Sexp.Atom "1";
+						Sexp.Atom "2";
+						Sexp.Atom "3";
+						Sexp.Atom "4";
+						Sexp.Atom "5";
+						Sexp.Atom "6";
+						Sexp.Atom "7";
+						Sexp.Atom "8";
+						Sexp.Atom "9";
+						Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "+"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "-"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "*"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "/"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "mod"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
 					]
 				]
 			] 
@@ -418,11 +416,11 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 		 BatList.nth inv_constraints_data 2, BatList.nth inv_constraints_data 3)
 	in
 	let _ =
-		if target != target_function_name then
-			failwith "Target function name does not match.";
+		if (String.compare target target_function_name) != 0 then
+			failwith ("Target function name does not match: expected " ^ target_function_name ^ ", but " ^ target); 
 	in
 	let _ = 
-		if not ((BatMap.mem pre macro_in) && (BatMap.mem trans macro_in) && (BatMap.mem post macro_in)) then
+		if not ((BatMap.mem pre macro_instantiator) && (BatMap.mem trans macro_instantiator) && (BatMap.mem post macro_instantiator)) then
 			failwith "Precondition, transition relation, and postcondition must be defined.";
 	in
 	let _ =
@@ -436,8 +434,8 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 		BatMap.foldi (fun id param (acc1, acc2) ->
 			match param with
 			| Param(i, ty) -> 
-				let (acc1, acc2) = (BatMap.add param Var(id,ty) acc1, BatMap.add i ty acc2) in
-				(BatMap.add Param(i + (BatMap.cardinal args_map), ty) Var(id ^ "!", ty) acc1, BatMap.add (i + (BatMap.cardinal args_map)) ty acc2)
+				let (acc1, acc2) = (BatMap.add param (Var(id,ty)) acc1, BatMap.add i ty acc2) in
+				(BatMap.add (Param(i + (BatMap.cardinal args_map), ty)) (Var(id ^ "!", ty)) acc1, BatMap.add (i + (BatMap.cardinal args_map)) ty acc2)
 			| _ -> assert false
 		) args_map (BatMap.empty, BatMap.empty)
 	in
@@ -471,8 +469,8 @@ let args_map_to_id2var args_map =
 	BatMap.foldi (fun id param acc ->
 		match param with
 		| Param(i, ty) -> 
-			let nonprime = BatMap.add id Var(id,ty) acc1 in
-		  BatMap.add (id ^ "!") Var(id ^ "!", ty) nonprime
+			let nonprime = BatMap.add id (Var(id,ty)) acc in
+		  BatMap.add (id ^ "!") (Var(id ^ "!", ty)) nonprime
 		| _ -> assert false
 	) args_map BatMap.empty
 
@@ -537,6 +535,7 @@ let parse file =
 			else
 				process_primed_vars primed_vars_data 
 		in
+		let _ = LogicalSpec.forall_var_map := id2var in (* to make Z3 query *)
 		let inv_constraints_data = filter_sexps_for "inv-constraint" sexps in
 		let _ = 
 			if (BatList.is_empty inv_constraints_data) then
@@ -544,7 +543,8 @@ let parse file =
 			else if (BatList.length inv_constraints_data) > 1 then 
 				failwith "Multi-function synthesis is not supported."
 		in
-		let spec = process_inv_constraints inv_constraints_data macro_instantiator target_function_name args_map in
+		
+		let spec = process_inv_constraints (BatList.hd inv_constraints_data) macro_instantiator target_function_name args_map in
 		let spec =
 			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map in
 			match cex_all_opt with
@@ -554,7 +554,7 @@ let parse file =
 					Specification.add_io_spec cex spec
 				) cex_all spec
 		in
-		(macro_instanstiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)
+		(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)
 	end
 	else
 	begin
