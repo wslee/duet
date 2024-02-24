@@ -436,8 +436,8 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 		BatMap.foldi (fun id param (acc1, acc2) ->
 			match param with
 			| Param(i, ty) -> 
-				let nonprime = (BatMap.add param Var(id,ty) acc1, BatMap.add i ty acc2) in
-				(BatMap.add Param(i + (BatMap.cardinal args_map), ty) Var(id ^ "!", ty) nonprime, BatMap.add (i + (BatMap.cardinal args_map)) ty acc2)
+				let (acc1, acc2) = (BatMap.add param Var(id,ty) acc1, BatMap.add i ty acc2) in
+				(BatMap.add Param(i + (BatMap.cardinal args_map), ty) Var(id ^ "!", ty) acc1, BatMap.add (i + (BatMap.cardinal args_map)) ty acc2)
 			| _ -> assert false
 		) args_map (BatMap.empty, BatMap.empty)
 	in
@@ -466,6 +466,15 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map trans_constraint) target_function_name in
 	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map post_constraint) target_function_name in
 	Specification.empty_spec
+
+let args_map_to_id2var args_map = 
+	BatMap.foldi (fun id param acc ->
+		match param with
+		| Param(i, ty) -> 
+			let nonprime = BatMap.add id Var(id,ty) acc1 in
+		  BatMap.add (id ^ "!") Var(id ^ "!", ty) nonprime
+		| _ -> assert false
+	) args_map BatMap.empty
 
 let parse file = 
 	Random.self_init(); 
@@ -521,7 +530,10 @@ let parse file =
 		let id2var =
 			if (BatList.is_empty primed_vars_data) then
 				let forall_vars_data = filter_sexps_for "declare-var" sexps in
-				process_forall_vars forall_vars_data
+				if (BatList.is_empty forall_vars_data) then
+					args_map_to_id2var args_map
+				else 
+					process_forall_vars forall_vars_data
 			else
 				process_primed_vars primed_vars_data 
 		in
@@ -533,6 +545,16 @@ let parse file =
 				failwith "Multi-function synthesis is not supported."
 		in
 		let spec = process_inv_constraints inv_constraints_data macro_instantiator target_function_name args_map in
+		let spec =
+			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map in
+			match cex_all_opt with
+			| None -> spec
+			| Some cex_all ->
+				BatSet.fold (fun cex spec ->
+					Specification.add_io_spec cex spec
+				) cex_all spec
+		in
+		(macro_instanstiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)
 	end
 	else
 	begin
