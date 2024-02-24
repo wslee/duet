@@ -404,7 +404,68 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			spec
 	) Specification.empty_spec constraints_data 
 
-let 
+let process_inv_constraints inv_constraints_data macro_instantiator target_function_name args_map =
+	let _ = assert (BatList.length inv_constraints_data = 4) in
+	let inv_constraints_data =
+		BatList.map (fun sexp -> 
+			match sexp with 
+			| Sexp.Atom s -> s
+			| _ -> assert false
+		) inv_constraints_data
+	in
+	let (target, pre, trans, post) = 
+		(BatList.nth inv_constraints_data 0, BatList.nth inv_constraints_data 1, 
+		 BatList.nth inv_constraints_data 2, BatList.nth inv_constraints_data 3)
+	in
+	let _ =
+		if target != target_function_name then
+			failwith "Target function name does not match.";
+	in
+	let _ = 
+		if not ((BatMap.mem pre macro_in) && (BatMap.mem trans macro_in) && (BatMap.mem post macro_in)) then
+			failwith "Precondition, transition relation, and postcondition must be defined.";
+	in
+	let _ =
+		if BatMap.cardinal macro_instantiator > 3 then
+			failwith "Inv-constraint cannot be mixed with macro definitions.";
+	in
+	let pre_f = BatMap.find pre macro_instantiator in
+	let trans_f = BatMap.find trans macro_instantiator in
+	let post_f = BatMap.find post macro_instantiator in
+	let (reverse_args_map, idx_to_type) = 
+		BatMap.foldi (fun id param (acc1, acc2) ->
+			match param with
+			| Param(i, ty) -> 
+				let nonprime = (BatMap.add param Var(id,ty) acc1, BatMap.add i ty acc2) in
+				(BatMap.add Param(i + (BatMap.cardinal args_map), ty) Var(id ^ "!", ty) nonprime, BatMap.add (i + (BatMap.cardinal args_map)) ty acc2)
+			| _ -> assert false
+		) args_map (BatMap.empty, BatMap.empty)
+	in
+	let inv_f = 
+		Function(
+			target_function_name,
+			BatList.map (fun idx -> 
+				Param(idx, BatMap.find idx idx_to_type)
+			) (BatList.range 0 `To ((BatMap.cardinal args_map) - 1)),
+			Bool
+		)
+	in
+	let inv_f_prime = 
+		Function(
+			target_function_name,
+			BatList.map (fun idx -> 
+				Param(idx, BatMap.find idx idx_to_type)
+			) (BatList.range (BatMap.cardinal args_map) `To ((BatMap.cardinal args_map) * 2 - 1)),
+			Bool
+		)
+	in
+	let pre_constraint = Function("=>", [pre_f; inv_f], Bool) in
+	let trans_constraint = Function("=>", [Function("and", [trans_f; inv_f], Bool); inv_f_prime], Bool) in
+	let post_constraint = Function("=>", [inv_f; post_f], Bool) in
+	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map pre_constraint) target_function_name in
+	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map trans_constraint) target_function_name in
+	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map post_constraint) target_function_name in
+	Specification.empty_spec
 
 let parse file = 
 	Random.self_init(); 
@@ -464,7 +525,14 @@ let parse file =
 			else
 				process_primed_vars primed_vars_data 
 		in
-
+		let inv_constraints_data = filter_sexps_for "inv-constraint" sexps in
+		let _ = 
+			if (BatList.is_empty inv_constraints_data) then
+				failwith "No constraints are given."
+			else if (BatList.length inv_constraints_data) > 1 then 
+				failwith "Multi-function synthesis is not supported."
+		in
+		let spec = process_inv_constraints inv_constraints_data macro_instantiator target_function_name args_map in
 	end
 	else
 	begin
