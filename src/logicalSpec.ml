@@ -38,6 +38,7 @@ let rec sexp_to_cex sexp =
 
 let identifier = ref "_"
 let do_enumeration = ref false
+let synth_inv = ref false
 
 (* make expr to get counter-example with Z3 *)
 let rec plug_in expr target_function_name cex_in_map (param2sig, sig_list) =
@@ -112,10 +113,59 @@ let rec resolve_expr sol target_function_name expr  =
 		else Function (op, BatList.map (resolve_expr sol target_function_name) exprs, ty)
 	| _ -> expr
 
+let process_z3query z3query =
+	let ctx = Z3.mk_context	[("model", "true"); ("proof", "false")] in
+	let exprSMT = Z3.SMT.parse_smtlib2_string ctx z3query [] [] [] [] in (* Z3.AST.ASTVector.ast_vector *)
+	let sat = Z3.AST.ASTVector.to_expr_list exprSMT in (* Z3.Expr.expr list *)
+	let solver = (Z3.Solver.mk_solver ctx None) in (* Z3.Solver.solver *)
+	(Z3.Solver.add solver sat);
+	let q = (Z3.Solver.check solver []) in (* ZMT.Solver.status *)
+	if !do_enumeration then 
+		begin
+		match q with
+		| UNSATISFIABLE -> None
+		| SATISFIABLE -> Some (BatMap.empty) 
+		| UNKNOWN -> assert false
+		end
+	else
+		let cex_var_map_opt = (
+		match q with
+		| UNSATISFIABLE -> None
+		| UNKNOWN -> assert false
+		| SATISFIABLE -> (
+			(* can get counter-example *)
+			let model_opt = Z3.Solver.get_model solver in
+			match model_opt with
+			| None -> assert false
+			| Some model ->
+				(* ex. (define-fun arg_0 () Bool false) (define-fun arg_2 () Bool true) (define-fun arg_1 () Bool false) *)
+				let decls = Z3.Model.get_decls model in (* vs. get_func_decls - only function delcarations *)
+				let name2expr = BatList.fold_right (fun decl acc -> 
+					let name = Z3.Symbol.to_string (Z3.FuncDecl.get_name decl) in (* ex. arg0 *)
+					let interp_opt = Z3.Model.get_const_interp model decl in (* ex. false *)
+					match interp_opt with
+					| None -> assert false
+					| Some interp -> 
+						BatMap.add name interp acc
+				) decls BatMap.empty in
+				(* (string, const) BatMap.t *)
+				let cex_var_map = BatMap.foldi (fun id _ acc ->
+					try
+						let z3expr = BatMap.find id name2expr in
+						let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
+						BatMap.add id (Const (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)))) acc
+					(* don't care term *)
+					with _ -> BatMap.add id (Const (get_trivial_value (type_of_expr (BatMap.find id !forall_var_map)))) acc
+				) !forall_var_map BatMap.empty in
+				Some (cex_var_map)
+			)
+		)
+		in 
+		cex_var_map_opt
+
 let get_counter_example sol target_function_name args_map = 
 	if !spec = [] then None (* can't found logical spec *)
-	else 
-		let ctx = Z3.mk_context	[("model", "true"); ("proof", "false")] in
+	else
 		(* STEP 01 : make logical spec to one expression (combine by 'and') *)
 		(* let combined = BatList.fold_left (fun acc_expr e ->
 				(* STEP 02 : resolve target function *)
@@ -149,59 +199,14 @@ let get_counter_example sol target_function_name args_map =
 			end
 		in
 		let z3query = params_str ^ (Printf.sprintf "\n(assert (not %s))" (Exprs.string_of_expr combined)) in
-		(* process query *)
-    let exprSMT = Z3.SMT.parse_smtlib2_string ctx z3query [] [] [] [] in (* Z3.AST.ASTVector.ast_vector *)
-    let sat = Z3.AST.ASTVector.to_expr_list exprSMT in (* Z3.Expr.expr list *)
-    let solver = (Z3.Solver.mk_solver ctx None) in (* Z3.Solver.solver *)
-  	(Z3.Solver.add solver sat);
-    let q = (Z3.Solver.check solver []) in (* ZMT.Solver.status *)
-		(* STEP 04 : get cex-in as counter example *)
-		(* print_endline "no problem!"; *)
-		if !do_enumeration then 
-			match q with
-			| UNSATISFIABLE -> None
-			| SATISFIABLE -> Some (BatSet.empty) 
-			| UNKNOWN -> assert false
-		else
-		let cex_var_map_opt = 
-		match q with
-    | UNSATISFIABLE -> None
-    | UNKNOWN -> assert false
-    | SATISFIABLE ->
-		begin  
-			(* can get counter-example *)
-			let model_opt = Z3.Solver.get_model solver in
-      match model_opt with
-      | None -> assert false
-      | Some model ->
-        (* ex. (define-fun arg_0 () Bool false) (define-fun arg_2 () Bool true) (define-fun arg_1 () Bool false) *)
-        let decls = Z3.Model.get_decls model in (* vs. get_func_decls - only function delcarations *)
-        let name2expr = BatList.fold_right (fun decl acc -> 
-          let name = Z3.Symbol.to_string (Z3.FuncDecl.get_name decl) in (* ex. arg0 *)
-          let interp_opt = Z3.Model.get_const_interp model decl in (* ex. false *)
-          match interp_opt with
-          | None -> assert false
-          | Some interp -> 
-            BatMap.add name interp acc
-        ) decls BatMap.empty in
-				(* (string, const) BatMap.t *)
-        let cex_var_map = BatMap.foldi (fun id _ acc ->
-					try
-						let z3expr = BatMap.find id name2expr in
-						let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
-						BatMap.add id (Const (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)))) acc
-					(* don't care term *)
-					with _ -> BatMap.add id (Const (get_trivial_value (type_of_expr (BatMap.find id !forall_var_map)))) acc
-					(* BatMap.add id (Const (CInt (-2))) acc *)
-				) !forall_var_map BatMap.empty in
-				Some (cex_var_map)
-		end
-		in 
+		let cex_var_map_opt = process_z3query z3query in
+		if !do_enumeration then
+			Some (BatSet.empty)
+		else 
 		let cex = 
 		match cex_var_map_opt with
 		| None -> None
-		| Some cex_var_map ->
-		begin
+		| Some cex_var_map -> (
 			let (param2sig, sig_list) = 
 				BatSet.fold (fun param (acc_map, acc_list) ->
 					let sig_in = BatList.map (fun e ->
@@ -223,50 +228,30 @@ let get_counter_example sol target_function_name args_map =
 				end
 			in
 			let z3query = params_str ^ (Printf.sprintf "\n(assert %s)" (Exprs.string_of_expr combined)) in
-			(* process query *)
-			let exprSMT = Z3.SMT.parse_smtlib2_string ctx z3query [] [] [] [] in (* Z3.AST.ASTVector.ast_vector *)
-			let sat = Z3.AST.ASTVector.to_expr_list exprSMT in (* Z3.Expr.expr list *)
-			let solver = (Z3.Solver.mk_solver ctx None) in (* Z3.Solver.solver *)
-			(Z3.Solver.add solver sat);
-			let q = (Z3.Solver.check solver []) in (* ZMT.Solver.status *)
-			match q with
-			| SATISFIABLE -> 
-			begin
-				let model_opt = Z3.Solver.get_model solver in
-				match model_opt with
-				| None -> assert false
-				| Some model ->
-					(* ex. (define-fun arg_0 () Bool false) (define-fun arg_2 () Bool true) (define-fun arg_1 () Bool false) *)
-					let decls = Z3.Model.get_decls model in (* vs. get_func_decls - only function delcarations *)
-					let name2expr = BatList.fold_right (fun decl acc -> 
-						let name = Z3.Symbol.to_string (Z3.FuncDecl.get_name decl) in (* ex. arg0 *)
-						let interp_opt = Z3.Model.get_const_interp model decl in (* ex. false *)
-						match interp_opt with
-						| None -> assert false
-						| Some interp -> 
-							BatMap.add name interp acc
-					) decls BatMap.empty in
-					let cex_all = 
-						BatMap.foldi (fun sig_id z3expr acc ->
-							let id_parse  = 
-								String.sub sig_id 
-								((String.length target_function_name) + (String.length !identifier) ) 
-								((String.length sig_id) - ((String.length target_function_name) + (String.length !identifier)))
-							in
-							(* print_endline ("id_parse : " ^ id_parse); *)
-							let sig_idx = int_of_string id_parse in
-							let sig_in = List.nth sig_list sig_idx in
-							let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
-					 		let sig_out = List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)) in 
-							BatSet.add (sig_in, sig_out) acc
-					)	name2expr BatSet.empty in
-					(* print_endline ("cex_all : " ^ (string_of_set (fun (sig_in, sig_out) -> 
-						(string_of_list string_of_const sig_in) ^ " -> " ^ (string_of_const sig_out)) cex_all)); *)
-					Some (cex_all)
-			end
-			| _ -> assert false
-		end 
-		in 
+			let map_opt = process_z3query z3query in
+			match map_opt with
+			| None -> assert false
+			| Some cex_var_map -> (
+				let cex_all = 
+					BatMap.foldi (fun sig_id const acc ->
+						let id_parse  = 
+							String.sub sig_id 
+							((String.length target_function_name) + (String.length !identifier) ) 
+							((String.length sig_id) - ((String.length target_function_name) + (String.length !identifier)))
+						in
+						(* print_endline ("id_parse : " ^ id_parse); *)
+						let sig_idx = int_of_string id_parse in
+						let sig_in = List.nth sig_list sig_idx in
+						match const with
+						| Const c -> BatSet.add (sig_in, c) acc
+						| _ -> assert false
+				)	cex_var_map BatSet.empty in
+				(* print_endline ("cex_all : " ^ (string_of_set (fun (sig_in, sig_out) -> 
+					(string_of_list string_of_const sig_in) ^ " -> " ^ (string_of_const sig_out)) cex_all)); *)
+				Some (cex_all)
+			)
+		)
+		in
 		cex
 ;;
 
