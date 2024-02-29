@@ -474,9 +474,9 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 	let pre_constraint = Function("=>", [pre_f; inv_f], Bool) in
 	let trans_constraint = Function("=>", [Function("and", [trans_f; inv_f], Bool); inv_f_prime], Bool) in
 	let post_constraint = Function("=>", [inv_f; post_f], Bool) in
-	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map pre_constraint) target_function_name in
-	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map trans_constraint) target_function_name in
-	let _ = LogicalSpec.add_constraint (change_param_to_var reverse_args_map post_constraint) target_function_name in
+	let _ = LogicalSpec.add_pre_constraint (change_param_to_var reverse_args_map pre_constraint) in 
+	let _ = LogicalSpec.add_trans_constraint (change_param_to_var reverse_args_map trans_constraint) in
+	let _ = LogicalSpec.add_post_constraint (change_param_to_var reverse_args_map post_constraint) in
 	Specification.empty_spec
 
 let args_map_to_id2var args_map = 
@@ -557,16 +557,12 @@ let parse file =
 			else if (BatList.length inv_constraints_data) > 1 then 
 				failwith "Multi-function synthesis is not supported."
 		in
-		
 		let spec = process_inv_constraints (BatList.hd inv_constraints_data) macro_instantiator target_function_name args_map in
 		let spec =
-			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map in
+			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map spec in
 			match cex_all_opt with
 			| None -> spec
-			| Some cex_all ->
-				BatSet.fold (fun cex spec ->
-					Specification.add_io_spec cex spec
-				) cex_all spec
+			| Some new_spec -> new_spec
 		in
 		(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)
 	end
@@ -583,13 +579,10 @@ let parse file =
 		let spec = process_constraints grammar target_function_name constraints_data macro_instantiator id2var in
 		let _ = LogicalSpec.forall_var_map := id2var in (* to make Z3 query *)
 		let spec = 
-			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map in
+			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map spec in
 			match cex_all_opt with
 			| None -> spec
-			| Some cex_all ->
-				BatSet.fold (fun cex spec ->
-					Specification.add_io_spec cex spec
-				) cex_all spec
+			| Some new_spec -> new_spec
 		in
 		my_prerr_endline (Specification.string_of_io_spec spec);
 		(* print_endline (Specification.string_of_io_spec spec); *)

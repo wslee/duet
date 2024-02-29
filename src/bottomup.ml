@@ -232,7 +232,7 @@ let rec enumerate sz nt is_start_nt grammar nts _ sz2idxes target_function_name 
     if success then (success, func)
     else
       let candidate = expr_of_idx idx in
-      let cex_opt = LogicalSpec.get_counter_example candidate target_function_name args_map in
+      let cex_opt = LogicalSpec.get_counter_example candidate target_function_name args_map [] in
       match cex_opt with
       | None -> (true, candidate)
       | Some _ -> (false, trivial)

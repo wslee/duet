@@ -88,6 +88,21 @@ let add_constraint e target_function_name =
 	else 
 		()
 
+let trivial_constraint = Const (get_trivial_value Bool)
+let pre_constraint = ref trivial_constraint
+let trans_constraint = ref trivial_constraint
+let post_constraint = ref trivial_constraint
+let synth_inv = ref false
+
+let add_pre_constraint e = 
+	pre_constraint := e
+
+let add_trans_constraint e =
+	trans_constraint := e
+
+let add_post_constraint e =
+	post_constraint := e
+
 let forall_var_map : (string, Exprs.expr) BatMap.t ref =
 	(* name -> Var *) 
 	ref BatMap.empty
@@ -113,6 +128,7 @@ let rec resolve_expr sol target_function_name expr  =
 		else Function (op, BatList.map (resolve_expr sol target_function_name) exprs, ty)
 	| _ -> expr
 
+(* string -> ((string, expr) BatMap.t) Option *)
 let process_z3query z3query =
 	let ctx = Z3.mk_context	[("model", "true"); ("proof", "false")] in
 	let exprSMT = Z3.SMT.parse_smtlib2_string ctx z3query [] [] [] [] in (* Z3.AST.ASTVector.ast_vector *)
@@ -149,23 +165,126 @@ let process_z3query z3query =
 						BatMap.add name interp acc
 				) decls BatMap.empty in
 				(* (string, const) BatMap.t *)
-				let cex_var_map = BatMap.foldi (fun id _ acc ->
+				let cex_var_map = BatMap.foldi (fun id z3expr acc ->
 					try
-						let z3expr = BatMap.find id name2expr in
 						let sexp = Parsexp.Single.parse_string_exn (Z3.Expr.to_string z3expr) in
 						BatMap.add id (Const (List.hd (evaluate_expr_faster [[CInt 0]] (sexp_to_cex sexp)))) acc
 					(* don't care term *)
 					with _ -> BatMap.add id (Const (get_trivial_value (type_of_expr (BatMap.find id !forall_var_map)))) acc
-				) !forall_var_map BatMap.empty in
+				) name2expr BatMap.empty in
 				Some (cex_var_map)
 			)
 		)
 		in 
 		cex_var_map_opt
 
-let get_counter_example sol target_function_name args_map = 
-	if !spec = [] then None (* can't found logical spec *)
-	else
+let rec make_cex_in target_function_name cex_in_map expr =
+	match expr with
+	| Function (op, exprs, ty) ->
+		if op = target_function_name then
+			let rec resolve_var_to_const expr =
+				match expr with
+				| Var (id, _) -> BatMap.find id cex_in_map
+				| Function (op, exprs, ty) -> 
+					Function (op, BatList.map resolve_var_to_const exprs, ty)
+				| _ -> expr
+			in
+			let resolved = BatList.map resolve_var_to_const exprs in
+			[BatList.map (fun e -> (List.hd (evaluate_expr_faster [[CInt 0]] e))) resolved]
+		else 
+			BatList.fold_left (fun acc e -> 
+				acc @ (make_cex_in target_function_name cex_in_map e)
+			) [] exprs
+	| _ -> []
+
+let get_counter_example sol target_function_name args_map old_spec = 
+	if !spec = [] then 
+		if !pre_constraint = trivial_constraint || !trans_constraint = trivial_constraint || !post_constraint = trivial_constraint then  
+			None (* can't found logical spec *)
+		else (
+			(* invariant synthesis *)
+			(* z3 query for pre-f, post-f *)
+			let params_str_not_primed = 
+				begin
+					BatMap.fold (fun var acc ->
+						match var with
+						| Var (id, ty) -> 
+							if id.[(String.length id) - 1] = '!' then acc
+							else 
+								Printf.sprintf "%s\n(declare-const %s %s)" 
+								acc id (string_of_type ~z3:true ty)
+						| _ -> assert false
+					) !forall_var_map ""
+				end
+			in
+			(* z3 query for trans-f *)
+			let params_str = 
+				begin
+					BatMap.fold (fun var acc ->
+						match var with
+						| Var (id, ty) ->
+							Printf.sprintf "%s\n(declare-const %s %s)" 
+							acc id (string_of_type ~z3:true ty)
+						| _ -> assert false
+					) !forall_var_map ""
+				end
+			in 
+			let resolved_pre = resolve_expr sol target_function_name !pre_constraint in
+			let resolved_post	= resolve_expr sol target_function_name !post_constraint in
+			let resolved_trans = resolve_expr sol target_function_name !trans_constraint in
+			let pre_z3query = params_str_not_primed ^ (Printf.sprintf "\n(assert (not %s))" (Exprs.string_of_expr resolved_pre)) in
+			let post_z3query = params_str_not_primed ^ (Printf.sprintf "\n(assert (not %s))" (Exprs.string_of_expr resolved_post)) in
+			let trans_z3query = params_str ^ (Printf.sprintf "\n(assert (not %s))" (Exprs.string_of_expr resolved_trans)) in
+			let pre_opt = process_z3query pre_z3query in
+			let post_opt = process_z3query post_z3query in
+			let trans_opt = process_z3query trans_z3query in
+			(* STEP 01 : check if pre-constraint can give counter-example *)
+			if (Option.is_some pre_opt) then (
+				match pre_opt with
+				| Some cex_var_map -> (
+					let cex_in = make_cex_in target_function_name cex_var_map !pre_constraint in
+					assert ((BatList.length cex_in) = 1);
+					let cex_in = BatList.hd cex_in in
+					Some ((cex_in, CBool (Concrete true))::old_spec)
+				)
+				| None -> assert false
+			)
+			(* STEP 02 : check if post-constraint can give counter-example *)
+			else if (Option.is_some (process_z3query post_z3query)) then (
+				match post_opt with
+				| Some cex_var_map -> (
+					let cex_in = make_cex_in target_function_name cex_var_map !post_constraint in
+					assert ((BatList.length cex_in) = 1);
+					let cex_in = BatList.hd cex_in in
+					Some ((cex_in, CBool (Concrete false))::old_spec)
+				)
+				| None -> assert false
+			)
+			(* STEP 03 : check if trans-constraint can give counter-example *)
+			else if (Option.is_some (process_z3query trans_z3query)) then (
+				(* Some (BatSet.empty) *)
+				match trans_opt with
+				| Some cex_var_map -> (
+					let cex_in = make_cex_in target_function_name cex_var_map !trans_constraint in
+					assert ((BatList.length cex_in) = 2);
+					(* always give two counter-examples. x = x' doesn't happen. *)
+					let (l, l') =
+					if (
+						let tmp = BatList.hd cex_in in
+						let alt_spec = BatList.map (fun e -> [e]) tmp in
+						List.hd (evaluate_expr_faster alt_spec sol) 
+						|> get_concrete_bool
+					)
+					then (BatList.nth cex_in 0, BatList.nth cex_in 1)
+					else (BatList.nth cex_in 1, BatList.nth cex_in 0)
+					in	
+					failwith "not implemented: counter-example for transition function";
+				)
+				| None -> assert false
+			)
+			else None
+		)
+	else 
 		(* STEP 01 : make logical spec to one expression (combine by 'and') *)
 		(* let combined = BatList.fold_left (fun acc_expr e ->
 				(* STEP 02 : resolve target function *)
@@ -200,8 +319,9 @@ let get_counter_example sol target_function_name args_map =
 		in
 		let z3query = params_str ^ (Printf.sprintf "\n(assert (not %s))" (Exprs.string_of_expr combined)) in
 		let cex_var_map_opt = process_z3query z3query in
+		(* STEP 04 : get counter-example *)
 		if !do_enumeration then
-			Some (BatSet.empty)
+			Some ([])
 		else 
 		let cex = 
 		match cex_var_map_opt with
@@ -232,36 +352,37 @@ let get_counter_example sol target_function_name args_map =
 			match map_opt with
 			| None -> assert false
 			| Some cex_var_map -> (
-				let cex_all = 
+				let new_spec =
 					BatMap.foldi (fun sig_id const acc ->
 						let id_parse  = 
 							String.sub sig_id 
 							((String.length target_function_name) + (String.length !identifier) ) 
 							((String.length sig_id) - ((String.length target_function_name) + (String.length !identifier)))
 						in
-						(* print_endline ("id_parse : " ^ id_parse); *)
 						let sig_idx = int_of_string id_parse in
 						let sig_in = List.nth sig_list sig_idx in
 						match const with
-						| Const c -> BatSet.add (sig_in, c) acc
+						| Const c -> (sig_in, c)::acc
 						| _ -> assert false
-				)	cex_var_map BatSet.empty in
+				)	cex_var_map old_spec in
 				(* print_endline ("cex_all : " ^ (string_of_set (fun (sig_in, sig_out) -> 
 					(string_of_list string_of_const sig_in) ^ " -> " ^ (string_of_const sig_out)) cex_all)); *)
-				Some (cex_all)
+				(* print_endline ("new_spec : " ^ (Specification.string_of_io_spec new_spec)); *)
+				Some (new_spec)
 			)
 		)
 		in
 		cex
 ;;
 
-let add_trivial_examples target_function_name args_map =
-	if !spec = [] then None 
+let add_trivial_examples target_function_name args_map old_spec =
+	if !spec = [] && (!pre_constraint = trivial_constraint || !trans_constraint = trivial_constraint || !post_constraint = trivial_constraint) then  
+		None
 	else 
 		let trivial_sol = 
 			Exprs.Const (Exprs.get_trivial_value (Grammar.type_of_nt Grammar.start_nt))
 		in
-		let exp_opt = get_counter_example trivial_sol target_function_name args_map in
+		let exp_opt = get_counter_example trivial_sol target_function_name args_map old_spec in
 		match exp_opt with
 		| None -> 
 			let cex_in =
@@ -279,5 +400,5 @@ let add_trivial_examples target_function_name args_map =
 				| Const c -> c
 				| _ -> assert false
 			in
-			Some (BatSet.singleton (cex_in, cex_out))
+			Some ([(cex_in, cex_out)])
 		| _ -> exp_opt
