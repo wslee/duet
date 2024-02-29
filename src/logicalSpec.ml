@@ -3,6 +3,7 @@ open Vocab
 open Exprs
 open Z3
 open BidirectionalUtils
+open Compatibility
 
 let rec string_of_sexp sexp = 
 	match sexp with
@@ -245,7 +246,7 @@ let get_counter_example sol target_function_name args_map old_spec =
 					let cex_in = make_cex_in target_function_name cex_var_map !pre_constraint in
 					assert ((BatList.length cex_in) = 1);
 					let cex_in = BatList.hd cex_in in
-					Some ((cex_in, CBool (Concrete true))::old_spec)
+					Some (add_strong_spec cex_in true old_spec)
 				)
 				| None -> assert false
 			)
@@ -256,7 +257,7 @@ let get_counter_example sol target_function_name args_map old_spec =
 					let cex_in = make_cex_in target_function_name cex_var_map !post_constraint in
 					assert ((BatList.length cex_in) = 1);
 					let cex_in = BatList.hd cex_in in
-					Some ((cex_in, CBool (Concrete false))::old_spec)
+					Some (add_strong_spec cex_in false old_spec)
 				)
 				| None -> assert false
 			)
@@ -278,7 +279,7 @@ let get_counter_example sol target_function_name args_map old_spec =
 					then (BatList.nth cex_in 0, BatList.nth cex_in 1)
 					else (BatList.nth cex_in 1, BatList.nth cex_in 0)
 					in	
-					failwith "not implemented: counter-example for transition function";
+					Some (add_weak_spec [l;l'] old_spec)
 				)
 				| None -> assert false
 			)
