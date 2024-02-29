@@ -38,6 +38,7 @@ let ret_type_of_op rule =
 	else if (String.compare op ">") = 0 then Bool
 	else if (String.compare op "<=") = 0 then Bool
 	else if (String.compare op ">=") = 0 then Bool
+	else if (String.compare op "=>") = 0 then Bool
 	else if (String.compare op "ite") = 0 then  
 		let nts = get_nts rule in 
 		let _ = assert ((BatList.length nts) = 3) in 
