@@ -1,4 +1,5 @@
 open Exprs
+open Vocab
 
 type compatibility = 
   | Strong of bool 
@@ -13,6 +14,11 @@ let all_map = ref BatMap.empty
 let weak_stack = ref []
 let b_list = [[true; true]; [false; true]; [false; false]]
 let strong_idx = -1
+
+let string_of_stack s = 
+  string_of_list (fun (aa, i) -> 
+    (string_of_list (string_of_list string_of_const) aa) ^ " " ^ (string_of_int i)
+  ) s
 
 let is_compatible a b  =
   try 
@@ -70,12 +76,25 @@ let add_weak a_list i =
   let _ = all_map := !tmp_map in
   weak_stack := (a_list, i) :: !weak_stack
 
+let remove_weak aa = 
+  all_map := BatList.fold_left (fun acc a ->
+    if BatMap.mem a !all_map then
+      let (idx, b) = BatMap.find a !all_map in
+      if idx = strong_idx then
+        acc
+      else
+        BatMap.remove a acc
+    else
+      acc
+  ) !all_map aa
+
 (* return (sig, bool option) list *)
 let rec modify () =
   if BatList.is_empty !weak_stack then raise StrongParadox
   else
     let (aa, out_ty) = BatList.hd !weak_stack in
     if out_ty = 2 then
+      let _ = remove_weak aa in
       let _ = weak_stack := BatList.tl !weak_stack in
       let rtn : (const list * bool option) list = modify () in
       let rtn = 
@@ -87,6 +106,7 @@ let rec modify () =
       rtn 
     else 
       try
+        let _ = remove_weak aa in
         let _ = weak_stack := BatList.tl !weak_stack in
         let _ = add_weak aa (out_ty + 1) in
         let bb = BatList.nth b_list (out_ty + 1) in
@@ -107,6 +127,7 @@ let rec pop_and_modify a =
   if BatList.mem a aa then
     modify ()
   else 
+    let _ = remove_weak aa in
     let _ = weak_stack := BatList.tl !weak_stack in
     let rtn = pop_and_modify a in
     let rtn = 
