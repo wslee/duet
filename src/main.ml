@@ -25,9 +25,12 @@ let main () =
 				my_prerr_endline (Specification.string_of_io_spec spec);
 				my_prerr_endline (Printf.sprintf "CEGIS iter: %d" (List.length spec));
   			let sol =
-  				Bidirectional.synthesis
-						(macro_instantiator, target_function_name, grammar, forall_var_map, spec)
-  			in
+					try
+						Bidirectional.synthesis
+							(macro_instantiator, target_function_name, grammar, forall_var_map, spec)
+					with Failure _ ->
+						cegis (Compatibility.modify_spec spec)
+				in
 				my_prerr_endline (Printf.sprintf "** Proposed candidate: %s **" (Exprs.string_of_expr sol));
 				(* spec' = spec + mismatched input-output examples *)
 				let spec' = 
