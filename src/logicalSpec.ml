@@ -185,7 +185,10 @@ let rec make_cex_in target_function_name cex_in_map expr =
 		if op = target_function_name then
 			let rec resolve_var_to_const expr =
 				match expr with
-				| Var (id, _) -> BatMap.find id cex_in_map
+				| Var (id, ty) -> (
+					try BatMap.find id cex_in_map 
+					with Not_found -> Const (get_trivial_value ty)
+				)
 				| Function (op, exprs, ty) -> 
 					Function (op, BatList.map resolve_var_to_const exprs, ty)
 				| _ -> expr
@@ -243,6 +246,7 @@ let get_counter_example sol target_function_name args_map old_spec =
 			if (Option.is_some pre_opt) then (
 				match pre_opt with
 				| Some cex_var_map -> (
+					(* print_endline "pre_opt is Some cex_var_map"; *)
 					let cex_in = make_cex_in target_function_name cex_var_map !pre_constraint in
 					assert ((BatList.length cex_in) = 1);
 					let cex_in = BatList.hd cex_in in
@@ -254,6 +258,8 @@ let get_counter_example sol target_function_name args_map old_spec =
 			else if (Option.is_some (process_z3query post_z3query)) then (
 				match post_opt with
 				| Some cex_var_map -> (
+					(* print_endline "post_opt is Some cex_var_map"; *)
+					(* print_endline (string_of_map (fun x -> x) string_of_expr cex_var_map); *)
 					let cex_in = make_cex_in target_function_name cex_var_map !post_constraint in
 					assert ((BatList.length cex_in) = 1);
 					let cex_in = BatList.hd cex_in in
@@ -266,6 +272,7 @@ let get_counter_example sol target_function_name args_map old_spec =
 				(* Some (BatSet.empty) *)
 				match trans_opt with
 				| Some cex_var_map -> (
+					(* print_endline "trans_opt is Some cex_var_map"; *)
 					let cex_in = make_cex_in target_function_name cex_var_map !trans_constraint in
 					assert ((BatList.length cex_in) = 2);
 					(* always give two counter-examples. x = x' doesn't happen. *)
