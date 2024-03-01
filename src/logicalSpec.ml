@@ -179,6 +179,38 @@ let process_z3query z3query =
 		in 
 		cex_var_map_opt
 
+let rec get_out_ty args_map l_list target_function_name i =
+	if i = 3 then i
+	else
+		let bb = BatList.nth b_list i in
+		let l_x_b  = BatList.combine l_list bb in
+		let no_paradox = BatList.for_all (fun (l, b) ->
+			let now_constraint = 
+				if b then !post_constraint
+				else !pre_constraint
+			in
+			let cex_var_map = 
+				BatMap.foldi (fun id param acc ->
+					match param with
+					| Param(pos, ty) ->
+						try 
+							let expr = Const (BatList.nth l pos) in
+							BatMap.add id expr acc
+						with _ -> acc
+					| _ -> assert false
+				) args_map BatMap.empty
+			in
+			let resolved = resolve_expr (Const (CBool (Concrete b))) target_function_name now_constraint in
+			let plugged = plug_in resolved target_function_name cex_var_map (BatMap.empty, []) in
+			let z3query = Printf.sprintf "(assert %s)" (Exprs.string_of_expr plugged) in
+			let opt = process_z3query z3query in
+			Option.is_some opt
+		) l_x_b
+		in 
+		if no_paradox then i 
+		else get_out_ty args_map l_list target_function_name (i + 1)
+
+
 let rec make_cex_in target_function_name cex_in_map expr =
 	match expr with
 	| Function (op, exprs, ty) ->
@@ -286,7 +318,8 @@ let get_counter_example sol target_function_name args_map old_spec =
 					then (BatList.nth cex_in 0, BatList.nth cex_in 1)
 					else (BatList.nth cex_in 1, BatList.nth cex_in 0)
 					in	
-					Some (add_weak_spec [l;l'] old_spec)
+					let idx = get_out_ty args_map [l;l'] target_function_name 0 in
+					Some (add_weak_spec [l;l'] idx old_spec)
 				)
 				| None -> assert false
 			)
