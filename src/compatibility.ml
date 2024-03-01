@@ -162,7 +162,7 @@ let modify_spec spec =
     failwith "There's no such loop invariant that fulfills given constraints.";
   )
 
-let add_weak_spec aa spec =
+let add_weak_spec aa idx spec =
   let rec add_weak_iter i =
     if i = 3 then
       let plan = modify () in
@@ -178,6 +178,6 @@ let add_weak_spec aa spec =
         add_weak_iter (i + 1)
   in
   try
-    add_weak_iter 0
+    add_weak_iter idx
   with StrongParadox ->
     failwith "There's no such loop invariant that fulfills given constraints.";
