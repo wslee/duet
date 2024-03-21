@@ -41,13 +41,14 @@ let identifier = ref "_"
 let do_enumeration = ref false
 let synth_inv = ref false
 
-(* make expr to get counter-example with Z3 *)
+(* modify expr to use Z3 query that asks for output value of siginature *)
 let rec plug_in expr target_function_name cex_in_map (param2sig, sig_list) =
 	match expr with
 	| Const _ -> expr
 	| Var (id, _) -> BatMap.find id cex_in_map 
 	| Function (op, exprs, ty) -> 
 		if op = target_function_name then
+			(* Function (f, [0; 1; 2], Bool) -> Var (f_0, Bool) *)
 			let now_sig = BatMap.find exprs param2sig in
 			let _, param_idx = 
 				BatList.fold_left (fun (found, idx) sig_in -> 
@@ -111,7 +112,7 @@ let forall_var_map : (string, Exprs.expr) BatMap.t ref =
 let string_of_logical_spec logical_spec = 
 	string_of_list string_of_expr logical_spec
 
-(* parameter -> var *)
+(* make Param to Var *)
 let rec resolve_expr sol target_function_name expr  = 
 	match expr with
 	| Function (op, exprs, ty) -> 
@@ -130,6 +131,7 @@ let rec resolve_expr sol target_function_name expr  =
 	| _ -> expr
 
 (* string -> ((string, expr) BatMap.t) Option *)
+(* returns (Variable name, Const) BatMap.t *)
 let process_z3query z3query =
 	let ctx = Z3.mk_context	[("model", "true"); ("proof", "false")] in
 	let exprSMT = Z3.SMT.parse_smtlib2_string ctx z3query [] [] [] [] in (* Z3.AST.ASTVector.ast_vector *)
@@ -179,6 +181,8 @@ let process_z3query z3query =
 		in 
 		cex_var_map_opt
 
+(* ONLY FOR SYNTH-INV *)
+(* find an output type that doesn't raise any paradox. *)
 let rec get_out_ty args_map l_list target_function_name i =
 	if i = 3 then i
 	else
@@ -210,7 +214,7 @@ let rec get_out_ty args_map l_list target_function_name i =
 		if no_paradox then i 
 		else get_out_ty args_map l_list target_function_name (i + 1)
 
-
+(* make signature using a result of z3query *)
 let rec make_cex_in target_function_name cex_in_map expr =
 	match expr with
 	| Function (op, exprs, ty) ->
@@ -233,6 +237,7 @@ let rec make_cex_in target_function_name cex_in_map expr =
 			) [] exprs
 	| _ -> []
 
+(* check if there is any counter-example for candidate program. *)
 let get_counter_example sol target_function_name args_map old_spec = 
 	if !spec = [] then 
 		if !pre_constraint = trivial_constraint || !trans_constraint = trivial_constraint || !post_constraint = trivial_constraint then  
@@ -327,22 +332,9 @@ let get_counter_example sol target_function_name args_map old_spec =
 		)
 	else 
 		(* STEP 01 : make logical spec to one expression (combine by 'and') *)
-		(* let combined = BatList.fold_left (fun acc_expr e ->
-				(* STEP 02 : resolve target function *)
-				Function ("and", [acc_expr; (resolve_expr sol target_function_name args_map e)], Bool)
-			) (resolve_expr sol target_function_name args_map (List.hd !spec)) (List.tl !spec)
-		in *)
 		let combined_spec = BatList.fold_left (fun acc_expr e -> 
 			Function ("and", [acc_expr; e], Bool)
 		) (List.hd !spec) (List.tl !spec) in
-		(* args_map : string -> Expr.Param : x1 -> Param(0, Int) *)
-		(* param2var : Expr.Param -> Expr.Var : Param(0, Int) -> Var(x1, Int) *)
-		(* let param2var = 
-			BatMap.foldi (fun id param_expr acc ->
-				let ty = type_of_expr param_expr in 
-				BatMap.add param_expr (Var(id, ty)) acc  
-			) args_map BatMap.empty
-		in *)
 		(* print_endline ("combined_spec : " ^ (string_of_expr combined_spec)); *)
 		let combined = resolve_expr sol target_function_name combined_spec in
 		(* print_endline ("combined : " ^ (string_of_expr combined)); *)
@@ -368,6 +360,8 @@ let get_counter_example sol target_function_name args_map old_spec =
 		match cex_var_map_opt with
 		| None -> None
 		| Some cex_var_map -> (
+			(* STEP 05 : get an output of given counter-example *)
+			(* BEGIN MAKING Z3QUERY *)
 			let (param2sig, sig_list) = 
 				BatSet.fold (fun param (acc_map, acc_list) ->
 					let sig_in = BatList.map (fun e ->
@@ -389,6 +383,7 @@ let get_counter_example sol target_function_name args_map old_spec =
 				end
 			in
 			let z3query = params_str ^ (Printf.sprintf "\n(assert %s)" (Exprs.string_of_expr combined)) in
+			(* END MAKING Z3QUERY *)
 			let map_opt = process_z3query z3query in
 			match map_opt with
 			| None -> assert false
@@ -426,6 +421,8 @@ let add_trivial_examples target_function_name args_map old_spec =
 		let exp_opt = get_counter_example trivial_sol target_function_name args_map old_spec in
 		match exp_opt with
 		| None -> 
+			(* trivial_sol can be target program. *)
+			(* ... but give io-spec for MAIN function *)
 			let cex_in =
 				BatMap.fold (fun param cex_in ->
 					match param with

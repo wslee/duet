@@ -47,12 +47,15 @@ let main () =
 				if (List.length spec) = (List.length spec') then 
 					match (if !Options.z3_cli then Specification.verify_cli else Specification.verify) sol spec with 
 					| None -> ( 
+							(* test if the cadidate always fulfils given logical solution *)
 							match (LogicalSpec.get_counter_example sol target_function_name args_map spec) with
 							| None -> 
+								(* no counter-example implies the candidate is a target program *)
 								prerr_endline ("# specs : " ^ (string_of_int (List.length spec)));
-								(* prerr_endline (Specification.string_of_io_spec spec); *)
 								sol
-							| Some new_spec -> cegis new_spec
+							| Some new_spec ->
+								(* There are some counter-exmaples. *)
+								cegis new_spec
 						)
 					| Some cex ->
 						my_prerr_endline (Specification.string_of_io_spec [cex]); 

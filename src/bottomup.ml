@@ -80,10 +80,12 @@ let idxes_of_size sz grammar nts sz2idxes spec =
           nidx := !nidx + 1;
           idx2node := BatMap.add idx (Leaf expr) !idx2node;
           idx2out := 
+            (* doing enumeration, don't use io-spec *)
             if !LogicalSpec.do_enumeration then
               !idx2out
             else BatMap.add idx (compute_signature spec expr) !idx2out;
           nt2out := 
+            (* doing enumeration, don't use io-spec *)
             if !LogicalSpec.do_enumeration then
               !nt2out
             else BatMap.add nt (BatSet.add (compute_signature spec (expr_of_idx idx)) (BatMap.find nt !nt2out)) !nt2out;
@@ -144,6 +146,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     let node = NonLeaf (BatMap.find rule !func2idx, acc) in
                     (* for equivalence param valuation *)
                     let new_spec = 
+                      (* doing enumeration, don't use io-spec *)
                       if !LogicalSpec.do_enumeration then
                         []
                       else
@@ -151,6 +154,7 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                     in
                     try (
                       let out = 
+                        (* doing enumeration, don't use io-spec *)
                         if !LogicalSpec.do_enumeration then
                           []
                         else
@@ -160,10 +164,12 @@ let idxes_of_size sz grammar nts sz2idxes spec =
                       else
                         let _ = nt2out := 
                           if !LogicalSpec.do_enumeration then
+                            (* do not update for doing enumeration *)
                             !nt2out
                           else BatMap.add nt (BatSet.add out (BatMap.find nt !nt2out)) !nt2out in
                         let _ = idx2out :=  
                           if !LogicalSpec.do_enumeration then
+                            (* do not update for doing enumeration *)
                             !idx2out
                           else BatMap.add idx out !idx2out in
                         let _ = nidx := !nidx + 1 in
@@ -232,6 +238,7 @@ let rec enumerate sz nt is_start_nt grammar nts _ sz2idxes target_function_name 
     if success then (success, func)
     else
       let candidate = expr_of_idx idx in
+      (* is there any counter-example? *)
       let cex_opt = LogicalSpec.get_counter_example candidate target_function_name args_map [] in
       match cex_opt with
       | None -> (true, candidate)

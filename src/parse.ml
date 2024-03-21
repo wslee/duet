@@ -231,6 +231,8 @@ let process_synth_funcs synth_fun_data =
 	let grammar = process_grammar args_map ret_type grammar_data in 
 	(name, args_map, grammar) 
 
+(* (synth-inv inv-f ((x Int) (y Int) (n Int))) *)
+(* L[ A:inv-f L[ L[A:x A:Int] L[A:y A:Int] L[A:n A:Int] ] ] *)
 let process_synth_invs synth_inv_data =
 	let _ = assert ((BatList.length synth_inv_data) = 4 || (BatList.length synth_inv_data) = 3 || (BatList.length synth_inv_data) = 2) in  
 	let (name_data, args_data, ret_type_data) = 
@@ -239,6 +241,7 @@ let process_synth_invs synth_inv_data =
 	in
 	let args_map = get_args_map args_data in  
 	let grammar_data =
+		(* a grammar that only use functions that supported by DUET as well *)
 		try BatList.nth synth_inv_data 3
 		with _ ->
 			Sexp.List [
@@ -320,6 +323,10 @@ let process_forall_vars forall_vars_data =
 		BatMap.add name (Var(name, ty)) m 
 	) BatMap.empty forall_vars_data    
 
+(* (declare-primed-var x Int) *)
+(* L[ A:x A:Int ] *)
+
+(* return: name -> Var expr *)
 let process_primed_vars forall_vars_data =
 	BatList.fold_left (fun m forall_var_data ->
 		let _ = assert ((BatList.length forall_var_data) = 2) in  
@@ -330,6 +337,7 @@ let process_primed_vars forall_vars_data =
 		let ty = sexp_to_type type_data in
 		(* set up the domain. the range will be determined later *) 
 		let m = BatMap.add name (Var(name, ty)) m in
+		(* add primed-var *)
 		BatMap.add (name ^ "!") (Var(name ^ "!", ty)) m 
 	) BatMap.empty forall_vars_data    
 
@@ -348,15 +356,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			let children = get_children exp in
 			let arg0 = BatList.nth children 0 in
 			let arg1 = BatList.nth children 1 in
-			let is_oracle_spec =
-				if (Exprs.is_function_expr arg0) && (Exprs.is_function_expr arg1) then 
-					let op0 = get_op arg0 in
-					let op1 = get_op arg1 in
-					((BatString.equal op0 target_function_name) && (BatMap.mem op1 macro_instantiator))
-					|| ((BatString.equal op1 target_function_name) && (BatMap.mem op0 macro_instantiator))
-				else
-					false
-			in
+			(* PBE spec: (f input) = output  *)
 			let is_pbe_spec =
 				if (Exprs.is_const_expr arg0) || (Exprs.is_const_expr arg1) then
 					let target_expr = if (Exprs.is_const_expr arg0) then arg1 else arg0 in
@@ -368,7 +368,16 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				else
 					false
 			in	
-			(* PBE spec: (f input) = output  *)
+			(* Oracle spec: (f inputs) = (f' inputs) *)
+			let is_oracle_spec =
+				if (Exprs.is_function_expr arg0) && (Exprs.is_function_expr arg1) then 
+					let op0 = get_op arg0 in
+					let op1 = get_op arg1 in
+					((BatString.equal op0 target_function_name) && (BatMap.mem op1 macro_instantiator))
+					|| ((BatString.equal op1 target_function_name) && (BatMap.mem op0 macro_instantiator))
+				else
+					false
+			in
 			if is_pbe_spec then
 				let inputs, output = 
 					if (BatString.equal (get_op arg0) target_function_name) then 
@@ -379,7 +388,6 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				(* let _ = prerr_endline (string_of_expr output) in                *)
 				let inputs = BatList.map expr2const inputs in   
 				Specification.add_io_spec (inputs, output) spec
-			(* Oracle spec: (f inputs) = (f' inputs) *)
 			else if is_oracle_spec then 
 				let oracle_expr, target_expr = 
 					if (BatString.equal (get_op arg0) target_function_name) then 
@@ -402,6 +410,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = Specification.forall_var_map := forall_var_map in 
 				Specification.add_trivial_examples grammar spec
 			else 
+				(* if given specification is neither PBE or Oracle *)
 				let _ =
 					try 
 						assert ((BatMap.cardinal macro_instantiator) = 0)
@@ -410,6 +419,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = LogicalSpec.add_constraint exp target_function_name in
 				spec
 		else
+			(* if given specification is neither PBE or Oracle *)
 			let _ =
 				try 
 					assert ((BatMap.cardinal macro_instantiator) = 0)
@@ -419,6 +429,8 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			spec
 	) Specification.empty_spec constraints_data 
 
+(* (inv-constraint inv-f pre-f trans-f post-f) *)
+(* L[ A:inv-f A:pre-f A:trans-f A:post-f ] *)
 let process_inv_constraints inv_constraints_data macro_instantiator target_function_name args_map =
 	let _ = assert (BatList.length inv_constraints_data = 4) in
 	let inv_constraints_data =
@@ -447,6 +459,10 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 	let pre_f = BatMap.find pre macro_instantiator in
 	let trans_f = BatMap.find trans macro_instantiator in
 	let post_f = BatMap.find post macro_instantiator in
+	(* args_map : id of inv-f's variable -> parameter *)
+	(* pre-f, trans-f, post-f : children are parameter. must change to variable for z3 query. *)
+	(* reverse_args_map : Param(pos, ty) -> Var(id, ty)   if mapping (id -> Param(pos, ty)) exists *)
+	(* idx-to-type :      pos -> ty                       if Param(pos,ty) exists *)
 	let (reverse_args_map, idx_to_type) = 
 		BatMap.foldi (fun id param (acc1, acc2) ->
 			match param with
@@ -456,6 +472,7 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 			| _ -> assert false
 		) args_map (BatMap.empty, BatMap.empty)
 	in
+	(* make children of inv-f and inv-f' to parameter to convert Param to Var at once. *)
 	let inv_f = 
 		Function(
 			target_function_name,
@@ -474,14 +491,18 @@ let process_inv_constraints inv_constraints_data macro_instantiator target_funct
 			Bool
 		)
 	in
+	(* pre-f => inv-f *)
 	let pre_constraint = Function("=>", [pre_f; inv_f], Bool) in
+	(* trans-f /\ inv-f => inv-f' *)
 	let trans_constraint = Function("=>", [Function("and", [trans_f; inv_f], Bool); inv_f_prime], Bool) in
+	(* inv-f => post-f *)
 	let post_constraint = Function("=>", [inv_f; post_f], Bool) in
 	let _ = LogicalSpec.add_pre_constraint (change_param_to_var reverse_args_map pre_constraint) in 
 	let _ = LogicalSpec.add_trans_constraint (change_param_to_var reverse_args_map trans_constraint) in
 	let _ = LogicalSpec.add_post_constraint (change_param_to_var reverse_args_map post_constraint) in
 	Specification.empty_spec
 
+(* when a specification doesn't declare variables (like sygus-inv-track-2019), get variables to use args_map *)
 let args_map_to_id2var args_map = 
 	BatMap.foldi (fun id param acc ->
 		match param with
