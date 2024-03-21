@@ -58,7 +58,14 @@ let rec sexp_to_expr sexp args_map =
 		let children = 
 			BatList.map (fun sexp' -> sexp_to_expr sexp' args_map) sexps'
 		in  
-		let expr_ty = sexp_to_type sexp in 
+		let expr_ty = 
+			try Grammar.ret_type_of_op (Grammar.FuncRewrite (op, []))
+			(* TODO : macro *)
+			with _ -> (
+				try type_of_nt (Grammar.start_nt) (* maybe target-function *)
+				with _ -> sexp_to_type sexp
+			)
+		in 
 		Function (op, children, expr_ty)
 	| Sexp.Atom s ->
 		let id = (Sexp.to_string sexp) in 
@@ -223,7 +230,86 @@ let process_synth_funcs synth_fun_data =
 	let ret_type = sexp_to_type ret_type_data in
 	let grammar = process_grammar args_map ret_type grammar_data in 
 	(name, args_map, grammar) 
-	
+
+(* (synth-inv inv-f ((x Int) (y Int) (n Int))) *)
+(* L[ A:inv-f L[ L[A:x A:Int] L[A:y A:Int] L[A:n A:Int] ] ] *)
+let process_synth_invs synth_inv_data =
+	let _ = assert ((BatList.length synth_inv_data) = 4 || (BatList.length synth_inv_data) = 3 || (BatList.length synth_inv_data) = 2) in  
+	let (name_data, args_data, ret_type_data) = 
+		(BatList.nth synth_inv_data 0, BatList.nth synth_inv_data 1, 
+		 try BatList.nth synth_inv_data 2 with _ -> Sexp.Atom "Bool")
+	in
+	let args_map = get_args_map args_data in  
+	let grammar_data =
+		(* a grammar that only use functions that supported by DUET as well *)
+		try BatList.nth synth_inv_data 3
+		with _ ->
+			Sexp.List [
+				Sexp.List [
+					Sexp.Atom "Start";
+					Sexp.Atom "Bool"; 
+					Sexp.List (BatMap.foldi (fun id param acc ->
+						match param with
+						| Param(i, ty) -> 
+							if ty = Bool then 
+								acc @ [Sexp.Atom id]
+							else acc
+						| _ -> assert false
+					)	args_map [
+						Sexp.Atom "true";
+						Sexp.Atom "false";
+						Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "not"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "and"; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "or"; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "="; Sexp.Atom "Start"; Sexp.Atom "Start"];
+						Sexp.List [Sexp.Atom "<"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "<="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom ">"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom ">="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "="; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+					])
+				];
+				Sexp.List [
+					Sexp.Atom "StartInt";
+					Sexp.Atom "Int";
+					Sexp.List (BatMap.foldi (fun id param acc ->
+						match param with
+						| Param(i, ty) -> 
+							if ty = Int then 
+								acc @ [Sexp.Atom id]
+							else acc
+						| _ -> assert false
+					)	args_map [
+						Sexp.Atom "0";
+						Sexp.Atom "1";
+						Sexp.Atom "2";
+						Sexp.Atom "3";
+						Sexp.Atom "4";
+						Sexp.Atom "5";
+						Sexp.Atom "6";
+						Sexp.Atom "7";
+						Sexp.Atom "8";
+						Sexp.Atom "9";
+						Sexp.List [Sexp.Atom "ite"; Sexp.Atom "Start"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "+"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "-"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "*"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "/"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+						Sexp.List [Sexp.Atom "mod"; Sexp.Atom "StartInt"; Sexp.Atom "StartInt"];
+					])
+				]
+			] 
+		in
+	let name = Sexp.to_string name_data in 
+	let ret_type = sexp_to_type ret_type_data in
+	let grammar = process_grammar args_map ret_type grammar_data 
+	in
+	(name, args_map, grammar) 
+
+(* (declare-var x (BitVec 64)) *)
+(* L[ A:declare-var L[ A:x L[ A:BitVec A:64]]] *)
+
 (* return: name -> Var expr *)
 let process_forall_vars forall_vars_data =
 	BatList.fold_left (fun m forall_var_data ->
@@ -237,11 +323,28 @@ let process_forall_vars forall_vars_data =
 		BatMap.add name (Var(name, ty)) m 
 	) BatMap.empty forall_vars_data    
 
+(* (declare-primed-var x Int) *)
+(* L[ A:x A:Int ] *)
+
+(* return: name -> Var expr *)
+let process_primed_vars forall_vars_data =
+	BatList.fold_left (fun m forall_var_data ->
+		let _ = assert ((BatList.length forall_var_data) = 2) in  
+  	let (name_data, type_data) = 
+  		(BatList.nth forall_var_data 0, BatList.nth forall_var_data 1)
+  	in
+		let name = Sexp.to_string name_data in
+		let ty = sexp_to_type type_data in
+		(* set up the domain. the range will be determined later *) 
+		let m = BatMap.add name (Var(name, ty)) m in
+		(* add primed-var *)
+		BatMap.add (name ^ "!") (Var(name ^ "!", ty)) m 
+	) BatMap.empty forall_vars_data    
+
 (* (constraint (= (hd01 x) (f x))) *)
 (* [L[ A:= L[ A:hd20 A:x] L[ A:f A:x]]] *)
 (* (constraint (= (f #xeed40423e830e30d) #x8895fdee0be78e79)) *)
 (* [L[ A:= L[ A:f A:#xeed40423e830e30d] A:#x8895fdee0be78e79]] *) 
-(* currently, only for PBE *)
 (* return: spec as Exprs.expr *)
 let process_constraints grammar target_function_name constraints_data macro_instantiator id2var =
 	BatList.fold_left (fun spec constraint_data ->
@@ -254,7 +357,28 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 			let arg0 = BatList.nth children 0 in
 			let arg1 = BatList.nth children 1 in
 			(* PBE spec: (f input) = output  *)
-			if (Exprs.is_const_expr arg0) || (Exprs.is_const_expr arg1) then
+			let is_pbe_spec =
+				if (Exprs.is_const_expr arg0) || (Exprs.is_const_expr arg1) then
+					let target_expr = if (Exprs.is_const_expr arg0) then arg1 else arg0 in
+					if (Exprs.is_function_expr target_expr) && (get_op target_expr) = target_function_name then 
+						let children = Exprs.get_children target_expr in
+						BatList.for_all (fun child -> Exprs.is_const_expr child) children
+					else 
+						false
+				else
+					false
+			in	
+			(* Oracle spec: (f inputs) = (f' inputs) *)
+			let is_oracle_spec =
+				if (Exprs.is_function_expr arg0) && (Exprs.is_function_expr arg1) then 
+					let op0 = get_op arg0 in
+					let op1 = get_op arg1 in
+					((BatString.equal op0 target_function_name) && (BatMap.mem op1 macro_instantiator))
+					|| ((BatString.equal op1 target_function_name) && (BatMap.mem op0 macro_instantiator))
+				else
+					false
+			in
+			if is_pbe_spec then
 				let inputs, output = 
 					if (BatString.equal (get_op arg0) target_function_name) then 
 						(get_children arg0, expr2const arg1)
@@ -264,8 +388,7 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				(* let _ = prerr_endline (string_of_expr output) in                *)
 				let inputs = BatList.map expr2const inputs in   
 				Specification.add_io_spec (inputs, output) spec
-			(* Oracle spec: (f inputs) = (f' inputs) *)
-			else if (Exprs.is_function_expr arg0) && (Exprs.is_function_expr arg1) then 
+			else if is_oracle_spec then 
 				let oracle_expr, target_expr = 
 					if (BatString.equal (get_op arg0) target_function_name) then 
 						arg1, arg0
@@ -287,9 +410,107 @@ let process_constraints grammar target_function_name constraints_data macro_inst
 				let _ = Specification.forall_var_map := forall_var_map in 
 				Specification.add_trivial_examples grammar spec
 			else 
-				failwith ("Not supported: synth-fun is missing")
-		else failwith ("Not supported: not a SyGuS-pbe specification")
+				(* if given specification is neither PBE or Oracle *)
+				let _ =
+					try 
+						assert ((BatMap.cardinal macro_instantiator) = 0)
+					with _ -> failwith "Non-oracle spec cannot be mixed with macro definitions.";
+				in
+				let _ = LogicalSpec.add_constraint exp target_function_name in
+				spec
+		else
+			(* if given specification is neither PBE or Oracle *)
+			let _ =
+				try 
+					assert ((BatMap.cardinal macro_instantiator) = 0)
+				with _ -> failwith "Non-oracle spec cannot be mixed with macro definitions.";
+			in
+			let _ = LogicalSpec.add_constraint exp target_function_name in
+			spec
 	) Specification.empty_spec constraints_data 
+
+(* (inv-constraint inv-f pre-f trans-f post-f) *)
+(* L[ A:inv-f A:pre-f A:trans-f A:post-f ] *)
+let process_inv_constraints inv_constraints_data macro_instantiator target_function_name args_map =
+	let _ = assert (BatList.length inv_constraints_data = 4) in
+	let inv_constraints_data =
+		BatList.map (fun sexp -> 
+			match sexp with 
+			| Sexp.Atom s -> s
+			| _ -> assert false
+		) inv_constraints_data
+	in
+	let (target, pre, trans, post) = 
+		(BatList.nth inv_constraints_data 0, BatList.nth inv_constraints_data 1, 
+		 BatList.nth inv_constraints_data 2, BatList.nth inv_constraints_data 3)
+	in
+	let _ =
+		if (String.compare target target_function_name) != 0 then
+			failwith ("Target function name does not match: expected " ^ target_function_name ^ ", but " ^ target); 
+	in
+	let _ = 
+		if not ((BatMap.mem pre macro_instantiator) && (BatMap.mem trans macro_instantiator) && (BatMap.mem post macro_instantiator)) then
+			failwith "Precondition, transition relation, and postcondition must be defined.";
+	in
+	let _ =
+		if BatMap.cardinal macro_instantiator > 3 then
+			failwith "Inv-constraint cannot be mixed with macro definitions.";
+	in
+	let pre_f = BatMap.find pre macro_instantiator in
+	let trans_f = BatMap.find trans macro_instantiator in
+	let post_f = BatMap.find post macro_instantiator in
+	(* args_map : id of inv-f's variable -> parameter *)
+	(* pre-f, trans-f, post-f : children are parameter. must change to variable for z3 query. *)
+	(* reverse_args_map : Param(pos, ty) -> Var(id, ty)   if mapping (id -> Param(pos, ty)) exists *)
+	(* idx-to-type :      pos -> ty                       if Param(pos,ty) exists *)
+	let (reverse_args_map, idx_to_type) = 
+		BatMap.foldi (fun id param (acc1, acc2) ->
+			match param with
+			| Param(i, ty) -> 
+				let (acc1, acc2) = (BatMap.add param (Var(id,ty)) acc1, BatMap.add i ty acc2) in
+				(BatMap.add (Param(i + (BatMap.cardinal args_map), ty)) (Var(id ^ "!", ty)) acc1, BatMap.add (i + (BatMap.cardinal args_map)) ty acc2)
+			| _ -> assert false
+		) args_map (BatMap.empty, BatMap.empty)
+	in
+	(* make children of inv-f and inv-f' to parameter to convert Param to Var at once. *)
+	let inv_f = 
+		Function(
+			target_function_name,
+			BatList.map (fun idx -> 
+				Param(idx, BatMap.find idx idx_to_type)
+			) (BatList.range 0 `To ((BatMap.cardinal args_map) - 1)),
+			Bool
+		)
+	in
+	let inv_f_prime = 
+		Function(
+			target_function_name,
+			BatList.map (fun idx -> 
+				Param(idx, BatMap.find idx idx_to_type)
+			) (BatList.range (BatMap.cardinal args_map) `To ((BatMap.cardinal args_map) * 2 - 1)),
+			Bool
+		)
+	in
+	(* pre-f => inv-f *)
+	let pre_constraint = Function("=>", [pre_f; inv_f], Bool) in
+	(* trans-f /\ inv-f => inv-f' *)
+	let trans_constraint = Function("=>", [Function("and", [trans_f; inv_f], Bool); inv_f_prime], Bool) in
+	(* inv-f => post-f *)
+	let post_constraint = Function("=>", [inv_f; post_f], Bool) in
+	let _ = LogicalSpec.add_pre_constraint (change_param_to_var reverse_args_map pre_constraint) in 
+	let _ = LogicalSpec.add_trans_constraint (change_param_to_var reverse_args_map trans_constraint) in
+	let _ = LogicalSpec.add_post_constraint (change_param_to_var reverse_args_map post_constraint) in
+	Specification.empty_spec
+
+(* when a specification doesn't declare variables (like sygus-inv-track-2019), get variables to use args_map *)
+let args_map_to_id2var args_map = 
+	BatMap.foldi (fun id param acc ->
+		match param with
+		| Param(i, ty) -> 
+			let nonprime = BatMap.add id (Var(id,ty)) acc in
+		  BatMap.add (id ^ "!") (Var(id ^ "!", ty)) nonprime
+		| _ -> assert false
+	) args_map BatMap.empty
 
 let parse file = 
 	Random.self_init(); 
@@ -322,19 +543,72 @@ let parse file =
 	(* ) macro_instantiator;                       *)
 	let synth_funs_data = filter_sexps_for "synth-fun" sexps in
 	let _ =
-		if (BatList.is_empty synth_funs_data) then
+		(* if (BatList.is_empty synth_funs_data) then
 			failwith "No target function to be synthesized is given."
 		else if (BatList.length synth_funs_data) > 1 then 
-			failwith "Multi-function synthesis is not supported." 
+			failwith "Multi-function synthesis is not supported."  *)
+		if (BatList.length synth_funs_data) > 1 then 
+			failwith "Multi-function synthesis is not supported."	 
 	in 
-	let target_function_name, args_map, grammar = 
-		process_synth_funcs (BatList.hd synth_funs_data) 
-	in 
-	(* prerr_endline (Grammar.string_of_grammar grammar); *)
-	let forall_vars_data = filter_sexps_for "declare-var" sexps in
-	let id2var = process_forall_vars forall_vars_data in  
-	let constraints_data = filter_sexps_for "constraint" sexps in
-	(* prerr_endline (string_of_list string_of_sexp (BatSet.choose constraints_data)); *)
-	let spec = process_constraints grammar target_function_name constraints_data macro_instantiator id2var in
-	my_prerr_endline (Specification.string_of_io_spec spec);
-	(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)  
+	if (BatList.is_empty synth_funs_data) then
+	begin
+		let synth_invs_data = filter_sexps_for "synth-inv" sexps in
+		let _ = 
+			if (BatList.is_empty synth_invs_data) then
+				failwith "No target function to be synthesized is given."
+			else if (BatList.length synth_invs_data) > 1 then 
+				failwith "Multi-function synthesis is not supported."
+		in
+		let target_function_name, args_map, grammar = 
+			process_synth_invs (BatList.hd synth_invs_data) 
+		in
+		let primed_vars_data = filter_sexps_for "declare-primed-var" sexps in
+		let id2var =
+			if (BatList.is_empty primed_vars_data) then
+				let forall_vars_data = filter_sexps_for "declare-var" sexps in
+				if (BatList.is_empty forall_vars_data) then
+					args_map_to_id2var args_map
+				else 
+					process_forall_vars forall_vars_data
+			else
+				process_primed_vars primed_vars_data 
+		in
+		let _ = LogicalSpec.forall_var_map := id2var in (* to make Z3 query *)
+		let inv_constraints_data = filter_sexps_for "inv-constraint" sexps in
+		let _ = 
+			if (BatList.is_empty inv_constraints_data) then
+				failwith "No constraints are given."
+			else if (BatList.length inv_constraints_data) > 1 then 
+				failwith "Multi-function synthesis is not supported."
+		in
+		let spec = process_inv_constraints (BatList.hd inv_constraints_data) macro_instantiator target_function_name args_map in
+		let spec =
+			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map spec in
+			match cex_all_opt with
+			| None -> spec
+			| Some new_spec -> new_spec
+		in
+		(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)
+	end
+	else
+	begin
+		let target_function_name, args_map, grammar = 
+			process_synth_funcs (BatList.hd synth_funs_data) 
+		in 
+		(* prerr_endline (Grammar.string_of_grammar grammar); *)
+		let forall_vars_data = filter_sexps_for "declare-var" sexps in
+		let id2var = process_forall_vars forall_vars_data in  
+		let constraints_data = filter_sexps_for "constraint" sexps in
+		(* prerr_endline (string_of_list string_of_sexp (BatSet.choose constraints_data)); *)
+		let spec = process_constraints grammar target_function_name constraints_data macro_instantiator id2var in
+		let _ = LogicalSpec.forall_var_map := id2var in (* to make Z3 query *)
+		let spec = 
+			let cex_all_opt = LogicalSpec.add_trivial_examples target_function_name args_map spec in
+			match cex_all_opt with
+			| None -> spec
+			| Some new_spec -> new_spec
+		in
+		my_prerr_endline (Specification.string_of_io_spec spec);
+		(* print_endline (Specification.string_of_io_spec spec); *)
+		(macro_instantiator, target_function_name, args_map, grammar, !Specification.forall_var_map, spec)  
+	end
