@@ -649,6 +649,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 		in 
   	let prev_size_nt_sig_to_expr = BatMap.cardinal nt_sig_to_expr in
 		(** Component generation via Bottom-up enumeration *)
+		let start = Sys.time () in
 		let (nt_to_sigs, size_to_nt_to_idxes, idx_to_sig) =
 			(* exclude ite's *)
 			(* when we add components, we don't have to add ite expressions as components; *)
@@ -673,6 +674,7 @@ let synthesis (macro_instantiator, target_function_name, grammar, forall_var_map
 		in
 		let nt_sig_to_expr = !nt_sig_to_expr_ref in
 		(* let nt_to_sigs = !nt_to_sigs_ref in *)
+		let _ = bu_time := !bu_time +. (Sys.time() -. start) in
 		(* set current component size *)
 		(* print_endline (string_of_map (fun (nt, sig') -> (string_of_rewrite nt) ^ " + " ^ (string_of_list string_of_const sig')) string_of_expr nt_sig_to_expr); *)
 		
