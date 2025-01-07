@@ -45,7 +45,7 @@ let synth_inv = ref false
 let rec plug_in expr target_function_name cex_in_map (param2sig, sig_list) =
 	match expr with
 	| Const _ -> expr
-	| Var (id, _) -> BatMap.find id cex_in_map 
+	| Var (id, ty) -> (try BatMap.find id cex_in_map with _ -> Const (get_trivial_value ty))
 	| Function (op, exprs, ty) -> 
 		if op = target_function_name then
 			(* Function (f, [0; 1; 2], Bool) -> Var (f_0, Bool) *)
