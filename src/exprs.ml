@@ -428,7 +428,14 @@ let fun_apply_signature op values =
 	else if (String.compare op "%") = 0 || (String.compare op "mod") = 0 then
 		let num1s = List.map get_int (List.nth values 0) in
 		let num2s = List.map get_int (List.nth values 1) in
-		List.map2 (fun num1 num2 -> CInt (num1 mod num2)) num1s num2s
+		let pump r div =
+			if r < 0 then
+				(((abs r) - 1) / div + 1) * div + r
+			else r
+		in
+		List.map2 (fun num1 num2 -> 
+			CInt (pump (num1 mod num2) num2)
+		) num1s num2s
 	else failwith ("not supported operator: " ^ op)		 	  
 
 (* param_valuation: (int, const list) BatMap.t *)
